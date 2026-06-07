@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  --color-primary: #00685f;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #008378;
+  --color-on-primary-container: #f4fffc;
+  --color-inverse-primary: #6bd8cb;
+  
+  --color-secondary: #006c49;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #6cf8bb;
+  --color-on-secondary-container: #00714d;
+  
+  --color-tertiary: #924628;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #b05e3d;
+  --color-on-tertiary-container: #fffbff;
+  
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+
+  --color-background-custom: #f5faf8;
+  
+  --color-surface: #f5faf8;
+  --color-surface-dim: #d6dbd9;
+  --color-surface-bright: #f5faf8;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f5f2;
+  --color-surface-container: #eaefed;
+  --color-surface-container-high: #e4e9e7;
+  --color-surface-container-highest: #dee4e1;
+  
+  --color-on-surface: #171d1c;
+  --color-on-surface-variant: #3d4947;
+  --color-outline: #6d7a77;
+  --color-outline-variant: #bcc9c6;
+
+  /* Custom Spacing Tokens */
+  --spacing-base: 4px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-gutter: 16px;
+  --spacing-margin-mobile: 16px;
+  --spacing-margin-desktop: 48px;
+
+  /* Accent colors for 12 sections */
+  --color-section-1: #3b82f6;
+  --color-section-2: #6366f1;
+  --color-section-3: #ec4899;
+  --color-section-4: #f43f5e;
+  --color-section-5: #a855f7;
+  --color-section-6: #14b8a6;
+  --color-section-7: #f59e0b;
+  --color-section-8: #8b5cf6;
+  --color-section-9: #10b981;
+  --color-section-10: #06b6d4;
+  --color-section-11: #f97316;
+  --color-section-12: #64748b;
+}
+
+body {
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Custom shadow utilities matching the design specs */
+.shadow-custom-sm {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+}
+
+.shadow-custom-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+}
+
+/* Custom Typography Helpers */
+.font-display { font-family: 'Inter', sans-serif; font-weight: 700; }
+.text-display { font-size: 36px; line-height: 44px; letter-spacing: -0.02em; }
+
+.font-headline-lg { font-family: 'Inter', sans-serif; font-weight: 600; }
+.text-headline-lg { font-size: 28px; line-height: 36px; }
+
+.font-headline-lg-mobile { font-family: 'Inter', sans-serif; font-weight: 600; }
+.text-headline-lg-mobile { font-size: 24px; line-height: 32px; }
+
+.font-headline-md { font-family: 'Inter', sans-serif; font-weight: 600; }
+.text-headline-md { font-size: 20px; line-height: 28px; }
+
+.font-body-lg { font-family: 'Inter', sans-serif; font-weight: 400; }
+.text-body-lg { font-size: 18px; line-height: 28px; }
+
+.font-body-md { font-family: 'Inter', sans-serif; font-weight: 400; }
+.text-body-md { font-size: 16px; line-height: 24px; }
+
+.font-label-md { font-family: 'Inter', sans-serif; font-weight: 500; }
+.text-label-md { font-size: 14px; line-height: 20px; letter-spacing: 0.01em; }
+
+.font-label-sm { font-family: 'Inter', sans-serif; font-weight: 500; }
+.text-label-sm { font-size: 12px; line-height: 16px; }
