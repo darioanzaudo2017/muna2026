@@ -1,0 +1,11 @@
+# .claudeignore — archivos que Claude Code NO debe leer
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+node_modules/
+dist/

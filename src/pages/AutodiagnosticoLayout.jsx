@@ -132,9 +132,11 @@ export default function AutodiagnosticoLayout() {
     }
     // Si ya tiene id, actualizamos; si no, insertamos
     if (respuesta.id) {
-      await supabase.from('respuestas').update(payload).eq('id', respuesta.id)
+      const { error } = await supabase.from('respuestas').update(payload).eq('id', respuesta.id)
+      if (error) throw error
     } else {
-      const { data } = await supabase.from('respuestas').insert(payload).select().single()
+      const { data, error } = await supabase.from('respuestas').insert(payload).select().single()
+      if (error) throw error
       return data // devuelve la fila con id para actualizar el estado local
     }
     return null
@@ -158,6 +160,7 @@ export default function AutodiagnosticoLayout() {
         setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 1500)
       } catch {
         setSaveStatus('error')
+        showToast("No se pudo guardar automáticamente. Verificá tu conexión.", "error")
       }
     }, 1500)
   }
@@ -227,6 +230,8 @@ export default function AutodiagnosticoLayout() {
       setTimeout(() => setSaveStatus(prev => prev === 'saved' ? 'idle' : prev), 1500)
     } catch {
       setSaveStatus('error')
+      showToast("No se pudieron guardar los datos. Por favor intentá de nuevo antes de continuar.", "error")
+      return
     }
 
     setAttemptedNavigation(false)

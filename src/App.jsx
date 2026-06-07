@@ -1,5 +1,7 @@
+// Proyecto: muna2026 — UNICEF
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import MunicipiosList from './pages/MunicipiosList'
 import MunicipioDashboard from './pages/MunicipioDashboard'
@@ -64,11 +66,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
-    </BrowserRouter>
+    <Sentry.ErrorBoundary fallback={<p className="p-8 text-center text-on-surface-variant">Ocurrió un error inesperado. Por favor recargá la página.</p>}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </Sentry.ErrorBoundary>
   )
 }
 
