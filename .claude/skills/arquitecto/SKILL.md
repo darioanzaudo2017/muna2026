@@ -108,3 +108,34 @@ No leer ninguna skill todavía.
 - Cambios directos en BD de producción
 - Variable `VITE_*` que parece un secret
 - Push a main sin tests pasando
+
+---
+
+## Generar CLAUDE.md — cuando no existe en el proyecto
+
+Si al arrancar una sesión no existe `CLAUDE.md` en la raíz, ofrecerlo:
+
+> "No encontré un CLAUDE.md en este proyecto. ¿Querés que lo genere?
+> Me lleva 2 minutos y después no tenés que explicar el contexto en cada sesión."
+
+Si acepta, hacer estas preguntas en UNA sola tanda:
+
+1. ¿Nombre del proyecto y para quién es? (cliente/institución)
+2. ¿Supabase project-ref? (Settings → General → Reference ID)
+3. ¿Qué tipo de proyecto? (municipal / comercio / mixto / otro)
+4. ¿Cuáles son las páginas o módulos principales?
+5. ¿Qué roles de usuario existen?
+
+Con esas respuestas + lo que Claude Code puede leer del proyecto
+(package.json, vite.config, estructura de src/, .env.example),
+generar el CLAUDE.md completo y mostrarlo para aprobación antes de crearlo.
+
+**Estructura mínima del CLAUDE.md generado:**
+- Identidad (nombre, cliente, tipo, project-ref, estado)
+- Stack técnico (versiones reales del package.json)
+- Estructura de carpetas (leída del proyecto real)
+- Base de datos (tablas y roles que el usuario confirmó)
+- Convenciones de código (inferidas del código existente)
+- Variables de entorno (leídas del .env.example si existe)
+- Pendientes conocidos (vacío al inicio, se completa con el tiempo)
+- Lo que NO hacer (reglas fijas de seguridad)

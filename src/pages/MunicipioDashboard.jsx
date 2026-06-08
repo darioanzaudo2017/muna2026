@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import SlideBar from '../components/SlideBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getOrCreateAutodiagnostico } from '../lib/supabase'
+import PlanDeAccion from './PlanDeAccion'
 
 // 12 sections template data with default icons and metrics (for Autodiagnóstico tab)
 const SECCIONES_TEMPLATE = [
@@ -40,6 +41,8 @@ export default function MunicipioDashboard() {
   const [drawerStatus, setDrawerStatus] = useState('En ejecución')
 
   const munId = Number(id) || 1
+  const [triggerAddLine, setTriggerAddLine] = useState(0)
+  const [triggerAddAction, setTriggerAddAction] = useState(0)
 
   const [muniNombre, setMuniNombre] = useState('')
   const [idAutodiagnostico, setIdAutodiagnostico] = useState(null)
@@ -306,7 +309,15 @@ export default function MunicipioDashboard() {
             <p className="font-body-lg text-body-lg text-on-surface-variant">Ciclo Operativo Año 2025</p>
           </div>
           
-          <button className="bg-primary text-on-primary font-bold px-lg h-12 rounded-full flex items-center gap-2 shadow-sm active:scale-95 transition-all border-none cursor-pointer">
+          <button 
+            onClick={() => {
+              if (activeTab !== 'plan') {
+                setActiveTab('plan')
+              }
+              setTriggerAddLine(prev => prev + 1)
+            }}
+            className="bg-primary text-on-primary font-bold px-lg h-12 rounded-full flex items-center gap-2 shadow-sm active:scale-95 transition-all border-none cursor-pointer"
+          >
             <span className="material-symbols-outlined">add</span>
             Nueva línea temática
           </button>
@@ -490,262 +501,25 @@ export default function MunicipioDashboard() {
 
         {/* Tab Content: Plan de Acción */}
         {activeTab === 'plan' && (
-          <div className="space-y-md animate-fade-in">
-            {/* Strategic Lines Accordions */}
-            
-            {/* Line 1: Participación */}
-            <article className={`bg-white rounded-2xl shadow-sm border border-outline-variant overflow-hidden transition-all ${openAccordions.line1 ? 'ring-1 ring-primary/20' : ''}`}>
-              <header 
-                className="flex items-center justify-between p-lg cursor-pointer hover:bg-surface-container-low transition-colors"
-                onClick={() => toggleAccordion('line1')}
-              >
-                <div className="flex items-center gap-lg">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>forum</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-headline-md text-headline-md text-on-surface">🗣️ Participación</h3>
-                      <span className="bg-secondary-container text-on-secondary-container text-label-sm px-2.5 py-0.5 rounded-full font-bold">80%</span>
-                    </div>
-                    <p className="text-label-md text-outline mt-0.5">Objetivo: Fomentar la participación activa de adolescentes en la agenda pública municipal.</p>
-                  </div>
-                </div>
-                <span 
-                  className="material-symbols-outlined transition-transform duration-300"
-                  style={{ transform: openAccordions.line1 ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                >
-                  expand_more
-                </span>
-              </header>
-
-              {openAccordions.line1 && (
-                <div className="bg-surface-container-lowest p-lg pt-0 border-t border-outline-variant/30 animate-fade-in">
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-lg mt-lg">
-                    {/* Meta Card */}
-                    <div className="lg:col-span-8 bg-surface border border-outline-variant/40 rounded-2xl p-lg flex flex-col justify-between">
-                      <div>
-                        <div className="flex justify-between items-start mb-md">
-                          <div>
-                            <span className="bg-secondary text-white text-[10px] uppercase font-bold px-2 py-1 rounded-md mb-2 inline-block">Meta Principal</span>
-                            <h4 className="font-headline-md text-headline-md text-on-surface">Impulsar espacios participativos para NNyA</h4>
-                          </div>
-                          <div className="text-right">
-                            <span className="bg-green-100 text-green-800 text-label-sm px-3 py-1 rounded-full font-bold border border-green-200">Activo</span>
-                            <p className="text-label-sm text-outline mt-1 font-medium">Dic 2025 → Nov 2026</p>
-                          </div>
-                        </div>
-
-                        {/* Progress Indicator */}
-                        <div className="bg-white p-lg rounded-xl border border-outline-variant/30 mb-lg">
-                          <div className="flex justify-between items-center mb-base">
-                            <span className="text-label-md font-bold text-on-surface">Progreso de la Meta</span>
-                            <span className="text-primary font-bold">60% alcanzado</span>
-                          </div>
-                          
-                          <div className="relative pt-6 pb-2">
-                            {/* Track */}
-                            <div className="h-3 bg-surface-container-high rounded-full w-full relative">
-                              {/* Fill */}
-                              <div className="absolute h-full bg-primary rounded-full transition-all duration-1000" style={{ width: '60%' }}></div>
-                              
-                              {/* Markers */}
-                              <div className="absolute -top-6 left-0 flex flex-col items-center">
-                                <span className="text-[10px] font-bold text-outline">Base: 0</span>
-                                <div className="w-0.5 h-2 bg-outline mt-1"></div>
-                              </div>
-                              <div className="absolute -top-6 left-[60%] flex flex-col items-center -translate-x-1/2">
-                                <span className="text-[10px] font-bold text-primary">Actual: 6</span>
-                                <div className="w-0.5 h-2 bg-primary mt-1"></div>
-                              </div>
-                              <div className="absolute -top-6 right-0 flex flex-col items-center">
-                                <span className="text-[10px] font-bold text-outline">Meta: 10</span>
-                                <div className="w-0.5 h-2 bg-outline mt-1"></div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Linked Actions */}
-                      <div>
-                        <h5 className="font-label-md text-label-md font-bold mb-sm flex items-center gap-2 text-on-surface">
-                          <span className="material-symbols-outlined text-[18px]">list_alt</span>
-                          Acciones Vinculadas (2)
-                        </h5>
-                        
-                        <div className="space-y-sm">
-                          {/* Action 1 */}
-                          <div 
-                            onClick={() => openDrawer('GSM-2025-ACT-004')}
-                            className="flex items-center justify-between p-md bg-white border border-outline-variant/20 rounded-xl hover:border-primary hover:shadow-custom-sm cursor-pointer transition-all active:scale-[0.99]"
-                          >
-                            <div className="flex items-center gap-md">
-                              <div className="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
-                                <img 
-                                  alt="Responsable" 
-                                  className="w-full h-full object-cover" 
-                                  src={actionsList['GSM-2025-ACT-004'].img}
-                                />
-                              </div>
-                              <div>
-                                <p className="font-label-md text-on-surface font-bold">{actionsList['GSM-2025-ACT-004'].name}</p>
-                                <p className="text-label-sm text-outline mt-0.5">{actionsList['GSM-2025-ACT-004'].resp}</p>
-                              </div>
-                            </div>
-                            <span className={`text-label-sm px-3 py-1 rounded-full font-bold ${
-                              actionsList['GSM-2025-ACT-004'].status === 'Completado' 
-                                ? 'bg-green-100 text-green-800' 
-                                : actionsList['GSM-2025-ACT-004'].status === 'Atrasado'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {actionsList['GSM-2025-ACT-004'].status}
-                            </span>
-                          </div>
-
-                          {/* Action 2 */}
-                          <div 
-                            onClick={() => openDrawer('GSM-2025-ACT-005')}
-                            className="flex items-center justify-between p-md bg-white border border-outline-variant/20 rounded-xl hover:border-primary hover:shadow-custom-sm cursor-pointer transition-all active:scale-[0.99]"
-                          >
-                            <div className="flex items-center gap-md">
-                              <div className="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
-                                <img 
-                                  alt="Responsable" 
-                                  className="w-full h-full object-cover" 
-                                  src={actionsList['GSM-2025-ACT-005'].img}
-                                />
-                              </div>
-                              <div>
-                                <p className="font-label-md text-on-surface font-bold">{actionsList['GSM-2025-ACT-005'].name}</p>
-                                <p className="text-label-sm text-outline mt-0.5">{actionsList['GSM-2025-ACT-005'].resp}</p>
-                              </div>
-                            </div>
-                            <span className={`text-label-sm px-3 py-1 rounded-full font-bold ${
-                              actionsList['GSM-2025-ACT-005'].status === 'Completado' 
-                                ? 'bg-green-100 text-green-800' 
-                                : actionsList['GSM-2025-ACT-005'].status === 'Atrasado'
-                                ? 'bg-red-100 text-red-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {actionsList['GSM-2025-ACT-005'].status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Context Panel */}
-                    <div className="lg:col-span-4 space-y-md">
-                      <div className="bg-white rounded-2xl p-md border border-outline-variant/30">
-                        <h5 className="font-label-md font-bold mb-md text-on-surface">Distribución de Recursos</h5>
-                        <div className="space-y-sm">
-                          <div className="flex justify-between text-label-sm">
-                            <span className="text-outline">Presupuesto</span>
-                            <span className="font-bold text-on-surface">$1.2M / $2M</span>
-                          </div>
-                          <div className="h-2 bg-surface-container rounded-full overflow-hidden">
-                            <div className="bg-secondary h-full rounded-full" style={{ width: '60%' }}></div>
-                          </div>
-                          
-                          <div className="flex justify-between text-label-sm mt-3">
-                            <span className="text-outline">Recurso Humano</span>
-                            <span className="font-bold text-on-surface">8 Agentes</span>
-                          </div>
-                          <div className="h-2 bg-surface-container rounded-full overflow-hidden">
-                            <div className="bg-tertiary h-full rounded-full" style={{ width: '80%' }}></div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-primary/5 rounded-2xl p-md border border-primary/20">
-                        <p className="text-label-sm text-primary font-bold mb-base italic">Insight del mes</p>
-                        <p className="text-label-md leading-relaxed text-on-primary-fixed-variant">
-                          "La participación aumentó un 15% tras la descentralización de los talleres en barrios periféricos."
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </article>
-
-            {/* Line 2: Salud Integral */}
-            <article className="bg-white rounded-2xl shadow-sm border border-outline-variant overflow-hidden">
-              <header 
-                className="flex items-center justify-between p-lg cursor-pointer hover:bg-surface-container-low transition-colors"
-                onClick={() => toggleAccordion('line2')}
-              >
-                <div className="flex items-center gap-lg">
-                  <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
-                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>health_and_safety</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-headline-md text-headline-md text-on-surface">🩺 Salud Integral</h3>
-                      <span className="bg-surface-container text-outline text-label-sm px-2.5 py-0.5 rounded-full font-bold">45%</span>
-                    </div>
-                    <p className="text-label-md text-outline mt-0.5">Objetivo: Garantizar el acceso a controles médicos preventivos y salud mental.</p>
-                  </div>
-                </div>
-                <span 
-                  className="material-symbols-outlined transition-transform duration-300"
-                  style={{ transform: openAccordions.line2 ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                >
-                  expand_more
-                </span>
-              </header>
-              
-              {openAccordions.line2 && (
-                <div className="bg-surface-container-lowest p-lg pt-0 border-t border-outline-variant/30 animate-fade-in">
-                  <p className="text-on-surface-variant p-8 text-center italic font-body-md">
-                    Cargando detalles de la línea de salud...
-                  </p>
-                </div>
-              )}
-            </article>
-
-            {/* Line 3: Educación */}
-            <article className="bg-white rounded-2xl shadow-sm border border-outline-variant overflow-hidden">
-              <header 
-                className="flex items-center justify-between p-lg cursor-pointer hover:bg-surface-container-low transition-colors"
-                onClick={() => toggleAccordion('line3')}
-              >
-                <div className="flex items-center gap-lg">
-                  <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
-                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>school</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-headline-md text-headline-md text-on-surface">📚 Educación</h3>
-                      <span className="bg-surface-container text-outline text-label-sm px-2.5 py-0.5 rounded-full font-bold">12%</span>
-                    </div>
-                    <p className="text-label-md text-outline mt-0.5">Objetivo: Reducir la deserción escolar en el nivel secundario mediante mentorías.</p>
-                  </div>
-                </div>
-                <span 
-                  className="material-symbols-outlined transition-transform duration-300"
-                  style={{ transform: openAccordions.line3 ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                >
-                  expand_more
-                </span>
-              </header>
-
-              {openAccordions.line3 && (
-                <div className="bg-surface-container-lowest p-lg pt-0 border-t border-outline-variant/30 animate-fade-in">
-                  <p className="text-on-surface-variant p-8 text-center italic font-body-md">
-                    Cargando detalles de la línea de educación...
-                  </p>
-                </div>
-              )}
-            </article>
-          </div>
+          <PlanDeAccion 
+            isDashboardTab={true} 
+            idMunicipio={munId}
+            triggerAddLine={triggerAddLine}
+            triggerAddAction={triggerAddAction}
+          />
         )}
       </main>
 
       {/* Floating Action Button */}
-      <button className="fixed bottom-margin-desktop right-margin-desktop w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 group border-none cursor-pointer">
+      <button 
+        onClick={() => {
+          if (activeTab !== 'plan') {
+            setActiveTab('plan')
+          }
+          setTriggerAddAction(prev => prev + 1)
+        }}
+        className="fixed bottom-margin-desktop right-margin-desktop w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 group border-none cursor-pointer"
+      >
         <span className="material-symbols-outlined text-[28px]">add</span>
         <span className="absolute right-full mr-4 bg-inverse-surface text-inverse-on-surface px-3 py-1.5 rounded text-label-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md pointer-events-none">
           Crear Nueva Acción
