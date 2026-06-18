@@ -11,6 +11,7 @@ import UserManagement from './pages/UserManagement'
 import QuestionConfig from './pages/QuestionConfig'
 import AutodiagnosticoLayout from './pages/AutodiagnosticoLayout'
 import PlanDeAccion from './pages/PlanDeAccion'
+import PlanDeAccionResumen from './pages/PlanDeAccionResumen'
 import { getOrCreateAutodiagnostico } from './lib/supabase'
 
 function ProtectedRoute({ children }) {
@@ -62,6 +63,7 @@ function AppRoutes() {
       <Route path="/municipio/:id/autodiagnostico/:idAutodiagnostico" element={<ProtectedRoute><AutodiagnosticoLayout /></ProtectedRoute>} />
       <Route path="/municipio/:id/seccion/:idSeccion" element={<ProtectedRoute><SeccionRedirect /></ProtectedRoute>} />
       <Route path="/municipio/:id/plan-de-accion" element={<ProtectedRoute><PlanDeAccion /></ProtectedRoute>} />
+      <Route path="/municipio/:id/plan-de-accion/resumen" element={<ProtectedRoute><PlanDeAccionResumen /></ProtectedRoute>} />
     </Routes>
   )
 }

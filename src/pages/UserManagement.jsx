@@ -11,23 +11,17 @@ export default function UserManagement() {
   // Sidebar Mobile State
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  // Data States
+  // States specified in prompt
   const [users, setUsers] = useState([])
   const [municipios, setMunicipios] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [usingMockData, setUsingMockData] = useState(false)
-
-  // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
-
-  // Modal State
+  const [statusFilter, setStatusFilter] = useState('all')
   const [selectedUserForAssign, setSelectedUserForAssign] = useState(null)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false)
   const [muniToAssign, setMuniToAssign] = useState('')
-
-  // Toast / Alert Notification State
   const [notification, setNotification] = useState(null)
 
   const showNotification = (message, type = 'success') => {
@@ -37,63 +31,10 @@ export default function UserManagement() {
     }, 4000)
   }
 
-  // Fallback Mock Data
-  const MOCK_MUNICIPIOS = [
-    { id: 1, nombre: 'General San Martín' },
-    { id: 2, nombre: 'Luján de Cuyo' },
-    { id: 3, nombre: 'Godoy Cruz' },
-    { id: 4, nombre: 'Guaymallén' },
-    { id: 5, nombre: 'Las Heras' },
-    { id: 6, nombre: 'Maipú' }
-  ]
-
-  const MOCK_USERS = [
-    {
-      id: 'usr-001',
-      email: 'juan.perez@municipio.gob',
-      full_name: 'Juan Pérez',
-      role: 'user',
-      created_at: '2024-01-15T10:30:00Z',
-      user_municipios: [
-        { idmunicipio: 1, municipios: { id: 1, nombre: 'General San Martín' } }
-      ]
-    },
-    {
-      id: 'usr-002',
-      email: 'sofia.rodriguez@lujan.gob',
-      full_name: 'Sofía Rodríguez',
-      role: 'user',
-      created_at: '2024-02-10T14:45:00Z',
-      user_municipios: [
-        { idmunicipio: 2, municipios: { id: 2, nombre: 'Luján de Cuyo' } },
-        { idmunicipio: 3, municipios: { id: 3, nombre: 'Godoy Cruz' } }
-      ]
-    },
-    {
-      id: 'usr-003',
-      email: 'carlos.gomez@gob.ar',
-      full_name: 'Carlos Gómez (Admin)',
-      role: 'admin',
-      created_at: '2023-11-01T09:00:00Z',
-      user_municipios: []
-    },
-    {
-      id: 'usr-004',
-      email: 'maria.dell@guaymallen.gob',
-      full_name: 'María Laura Dell',
-      role: 'user',
-      created_at: '2024-03-22T11:15:00Z',
-      user_municipios: [
-        { idmunicipio: 4, municipios: { id: 4, nombre: 'Guaymallén' } }
-      ]
-    }
-  ]
-
   const loadData = async () => {
     setLoading(true)
     setError(null)
     try {
-      // 1. Fetch available municipalities
       const { data: muniData, error: muniErr } = await supabase
         .from('municipios')
         .select('id, nombre')
@@ -101,70 +42,76 @@ export default function UserManagement() {
 
       if (muniErr) throw muniErr
 
-      // 2. Fetch profiles with nested user_municipios & municipios
       const { data: userData, error: userErr } = await supabase
         .from('profiles')
-        .select(`*, user_municipios(idmunicipio, municipios(id, nombre))`)
+        .select('*, user_municipios(idmunicipio, municipios(id, nombre))')
         .order('created_at', { ascending: false })
 
       if (userErr) throw userErr
 
       setMunicipios(muniData || [])
       setUsers(userData || [])
-      setUsingMockData(false)
     } catch (err) {
-      console.warn("Supabase fetch failed, falling back to mock data:", err.message)
-      setMunicipios(MOCK_MUNICIPIOS)
-      setUsers(MOCK_USERS)
-      setUsingMockData(true)
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    // Only load if the user is authenticated and is admin
     if (!authLoading && isAdmin) {
       loadData()
     }
   }, [authLoading, isAdmin])
 
-  // Change Role Action
   const handleToggleRole = async (userId, currentRole) => {
-    const newRole = currentRole === 'admin' ? 'user' : 'admin'
+    const newRole = currentRole === 'admin' ? 'tecnico_municipal' : 'admin'
     try {
-      if (!usingMockData) {
-        const { error: updateErr } = await supabase
-          .from('profiles')
-          .update({ role: newRole })
-          .eq('id', userId)
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId)
 
-        if (updateErr) throw updateErr
-      }
+      if (updateErr) throw updateErr
 
-      // Update local state
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u))
-      showNotification(`Rol de usuario actualizado a '${newRole}' con éxito`, 'success')
+      showNotification(`Rol actualizado a ${newRole === 'admin' ? 'Administrador' : 'Técnico Municipal'}`, 'success')
     } catch (err) {
-      console.error("Error updating role:", err)
-      showNotification("Error al actualizar el rol: " + err.message, 'error')
+      showNotification(err.message, 'error')
     }
   }
 
-  // Remove Municipality Assignment Action
+  const handleToggleActivo = async (userId, currentActivo, isCurrentUser) => {
+    if (isCurrentUser) {
+      showNotification('No puedes desactivar tu propio usuario', 'error')
+      return
+    }
+    const newActivo = !currentActivo
+    try {
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ activo: newActivo })
+        .eq('id', userId)
+
+      if (updateErr) throw updateErr
+
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, activo: newActivo } : u))
+      showNotification(newActivo ? 'Usuario activado' : 'Usuario desactivado', 'success')
+    } catch (err) {
+      showNotification(err.message, 'error')
+    }
+  }
+
   const handleRemoveAssignment = async (userId, municipioId) => {
     try {
-      if (!usingMockData) {
-        const { error: deleteErr } = await supabase
-          .from('user_municipios')
-          .delete()
-          .eq('user_id', userId)
-          .eq('idmunicipio', municipioId)
+      const { error: deleteErr } = await supabase
+        .from('user_municipios')
+        .delete()
+        .eq('user_id', userId)
+        .eq('idmunicipio', municipioId)
 
-        if (deleteErr) throw deleteErr
-      }
+      if (deleteErr) throw deleteErr
 
-      // Update local state
       setUsers(prev => prev.map(u => {
         if (u.id === userId) {
           return {
@@ -174,21 +121,12 @@ export default function UserManagement() {
         }
         return u
       }))
-      showNotification("Asignación de municipio removida", 'success')
+      showNotification('Asignación eliminada correctamente', 'success')
     } catch (err) {
-      console.error("Error removing assignment:", err)
-      showNotification("Error al remover asignación: " + err.message, 'error')
+      showNotification(err.message, 'error')
     }
   }
 
-  // Open Assign Modal
-  const openAssignModal = (user) => {
-    setSelectedUserForAssign(user)
-    setIsAssignModalOpen(true)
-    setMuniToAssign('')
-  }
-
-  // Assign Municipality Action
   const handleConfirmAssign = async (e) => {
     e.preventDefault()
     if (!muniToAssign || !selectedUserForAssign) return
@@ -197,18 +135,14 @@ export default function UserManagement() {
     const selectedMuniDetails = municipios.find(m => m.id === municipioId)
 
     try {
-      if (!usingMockData) {
-        const { error: insertErr } = await supabase
-          .from('user_municipios')
-          .insert({ user_id: selectedUserForAssign.id, idmunicipio: municipioId })
+      const { error: insertErr } = await supabase
+        .from('user_municipios')
+        .insert({ user_id: selectedUserForAssign.id, idmunicipio: municipioId })
 
-        if (insertErr) throw insertErr
-      }
+      if (insertErr) throw insertErr
 
-      // Update local state
       setUsers(prev => prev.map(u => {
         if (u.id === selectedUserForAssign.id) {
-          // Prevent duplicates
           if (u.user_municipios.some(um => um.idmunicipio === municipioId)) return u
           return {
             ...u,
@@ -225,72 +159,119 @@ export default function UserManagement() {
       }))
 
       setIsAssignModalOpen(false)
-      showNotification(`Municipio '${selectedMuniDetails?.nombre}' asignado correctamente`, 'success')
+      setMuniToAssign('')
+      showNotification('Municipio asignado correctamente', 'success')
     } catch (err) {
-      console.error("Error assigning municipality:", err)
-      showNotification("Error al asignar municipio: " + err.message, 'error')
+      showNotification(err.message, 'error')
     }
   }
 
-  // Filters search results
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          u.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesRole = roleFilter === 'all' || u.role === roleFilter
-    return matchesSearch && matchesRole
+    const matchesSearch = 
+      (u.full_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
+      (u.email?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+    
+    const matchesRole = 
+      roleFilter === 'all' || 
+      u.role === roleFilter
+
+    const matchesStatus = 
+      statusFilter === 'all' || 
+      (statusFilter === 'active' && u.activo) || 
+      (statusFilter === 'inactive' && !u.activo)
+
+    return matchesSearch && matchesRole && matchesStatus
   })
 
-  // Auth Guard / Access Denied States
+  // Stats calculation
+  const totalUsers = users.length
+  const adminUsersCount = users.filter(u => u.role === 'admin').length
+  const tecnicoUsersCount = users.filter(u => u.role === 'tecnico_municipal').length
+  const inactiveUsersCount = users.filter(u => !u.activo).length
+
   if (authLoading) {
     return (
-      <div className="bg-surface-container-low min-h-screen flex flex-col justify-center items-center gap-md">
+      <div className="bg-surface-container-low min-h-screen flex flex-col justify-center items-center gap-4">
         <span className="material-symbols-outlined text-[48px] animate-spin text-primary">sync</span>
         <p className="font-headline-md text-headline-md text-on-surface">Cargando perfil...</p>
       </div>
     )
   }
 
+  // Auth Guard: Not Admin
   if (!authProfile || !isAdmin) {
     return (
-      <div className="bg-background text-on-surface min-h-screen flex flex-col selection:bg-error-container">
-        {/* Header */}
-        <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 bg-surface shadow-custom-sm border-b border-outline-variant">
-          <div className="flex items-center gap-sm">
-            <span className="font-headline-md text-headline-md font-bold text-primary">Municipal Guardian</span>
+      <div className="bg-surface-container-low text-on-surface min-h-screen flex flex-col">
+        <header className="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-6 h-16 bg-surface shadow-sm border-b border-outline-variant">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-xl text-primary">Municipal Guardian</span>
           </div>
           <button 
             onClick={() => navigate('/login')}
-            className="bg-primary text-on-primary px-lg py-sm rounded-xl font-label-md text-label-md hover:bg-primary-container transition-all"
+            className="bg-primary text-on-primary px-4 py-2 rounded-xl text-sm font-semibold hover:opacity-90 transition-all"
           >
             Iniciar Sesión
           </button>
         </header>
 
-        {/* Content */}
-        <main className="flex-grow flex items-center justify-center px-margin-mobile pt-24 pb-12">
-          <div className="w-full max-w-[500px] bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant p-8 md:p-12 text-center space-y-6">
-            <div className="w-20 h-20 bg-error-container text-error rounded-full flex items-center justify-center mx-auto">
+        <main className="flex-grow flex items-center justify-center p-6 pt-24">
+          <div className="w-full max-w-[500px] bg-surface-container-lowest rounded-2xl shadow-md border border-outline-variant p-8 text-center space-y-6">
+            <div className="w-20 h-20 bg-error-container text-on-error-container rounded-full flex items-center justify-center mx-auto">
               <span className="material-symbols-outlined text-[40px]">gpp_bad</span>
             </div>
-            <h1 className="font-display text-display text-error">Acceso Denegado</h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+            <h1 className="text-3xl font-bold text-on-surface">Acceso Denegado</h1>
+            <p className="text-on-surface-variant leading-relaxed">
               Esta sección está reservada exclusivamente para administradores del sistema. Comuníquese con la mesa de ayuda si considera que esto es un error.
             </p>
             <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center">
               <button 
                 onClick={() => navigate('/')} 
-                className="bg-primary text-on-primary px-xl h-12 rounded-lg font-label-md text-label-md hover:bg-primary-container transition-all flex items-center justify-center gap-sm cursor-pointer border-none"
+                className="bg-primary text-on-primary px-6 h-12 rounded-xl font-semibold hover:opacity-90 transition-all flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-[20px]">home</span>
                 Volver al Inicio
               </button>
               <button 
                 onClick={() => navigate(-1)} 
-                className="bg-surface-container-high text-on-surface-variant px-xl h-12 rounded-lg font-label-md text-label-md hover:bg-surface-container-highest transition-all flex items-center justify-center gap-sm cursor-pointer border-none"
+                className="bg-surface-container-high text-on-surface-variant px-6 h-12 rounded-xl font-semibold hover:bg-surface-container-highest transition-all flex items-center justify-center gap-2"
               >
                 Regresar
               </button>
             </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Load Data Error Screen
+  if (error) {
+    return (
+      <div className="bg-surface-container-low text-on-surface min-h-screen flex flex-col">
+        <SlideBar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+        <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-6 h-16 bg-surface shadow-sm border-b border-outline-variant md:pl-72">
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="md:hidden material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors"
+            >
+              menu
+            </button>
+            <span className="font-bold text-xl text-primary">Gestión de Usuarios</span>
+          </div>
+        </header>
+        <main className="md:ml-64 pt-24 pb-12 px-6 flex-grow flex flex-col justify-center items-center">
+          <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant text-center max-w-md w-full">
+            <span className="material-symbols-outlined text-error-container text-[48px] bg-error-container text-on-error-container p-4 rounded-full mb-4">error</span>
+            <h2 className="text-xl font-bold text-on-surface mb-2">Error al cargar datos</h2>
+            <p className="text-on-surface-variant mb-6 text-sm">{error}</p>
+            <button
+              onClick={loadData}
+              className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-medium hover:bg-primary/95 transition-all inline-flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm">refresh</span>
+              Reintentar
+            </button>
           </div>
         </main>
       </div>
@@ -303,21 +284,21 @@ export default function UserManagement() {
 
       {/* Toast Notification */}
       {notification && (
-        <div className={`fixed top-20 right-6 z-50 flex items-center gap-sm px-lg py-md rounded-xl shadow-custom-md border transition-all animate-bounce ${
+        <div className={`fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-md border transition-all ${
           notification.type === 'error' 
-            ? 'bg-error-container text-on-error-container border-error/20' 
-            : 'bg-secondary-container text-on-secondary-container border-secondary/20'
+            ? 'bg-error-container text-on-error-container border-outline-variant/30' 
+            : 'bg-primary text-on-primary border-outline-variant/30'
         }`}>
           <span className="material-symbols-outlined">
             {notification.type === 'error' ? 'error' : 'check_circle'}
           </span>
-          <span className="font-label-md text-label-md font-semibold">{notification.message}</span>
+          <span className="text-sm font-semibold">{notification.message}</span>
         </div>
       )}
 
-      {/* TopNavBar */}
-      <header className="fixed top-0 left-0 w-full z-45 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 bg-surface shadow-custom-sm border-b border-outline-variant md:pl-72">
-        <div className="flex items-center gap-md">
+      {/* Top Header */}
+      <header className="fixed top-0 left-0 w-full z-40 flex justify-between items-center px-6 h-16 bg-surface shadow-sm border-b border-outline-variant md:pl-72">
+        <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsSidebarOpen(true)}
             className="md:hidden material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer"
@@ -327,26 +308,17 @@ export default function UserManagement() {
           </button>
           <button 
             onClick={() => navigate('/')}
-            className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-surface-container transition-colors bg-transparent border-none cursor-pointer text-primary"
+            className="flex items-center justify-center w-10 h-10 rounded-xl hover:bg-surface-container transition-colors bg-transparent border-none cursor-pointer text-primary"
             title="Volver a Municipios"
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <div className="flex items-center gap-sm">
-            <span className="font-headline-md text-headline-md font-bold text-primary">Panel de Administración</span>
-            <span className="bg-primary/10 text-primary text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline-block">
-              Usuarios
-            </span>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-xl text-primary">Gestión de Usuarios</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-md">
-          {usingMockData && (
-            <div className="bg-tertiary-container text-on-tertiary-container text-[12px] font-semibold px-3 py-1.5 rounded-full flex items-center gap-xs">
-              <span className="material-symbols-outlined text-[16px] animate-pulse">cloud_off</span>
-              <span>Modo Demostración</span>
-            </div>
-          )}
+        <div className="flex items-center gap-3">
           <button 
             onClick={loadData}
             className="material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer"
@@ -354,124 +326,173 @@ export default function UserManagement() {
           >
             refresh
           </button>
-          <div className="flex items-center gap-sm bg-surface-container px-3 py-1.5 rounded-full">
+          <div className="flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-full">
             <span className="material-symbols-outlined text-primary">account_circle</span>
-            <span className="font-label-sm text-label-sm font-semibold hidden sm:inline-block">{authProfile?.full_name || authUser?.email}</span>
+            <span className="text-sm font-semibold hidden sm:inline-block">
+              {authProfile?.full_name || authUser?.email}
+            </span>
           </div>
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="md:ml-64 pt-24 pb-32 px-margin-mobile md:px-margin-desktop max-w-7xl mx-auto w-full flex-grow">
-        {/* Page Header */}
-        <section className="mb-xl">
-          <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">
+      {/* Main Content */}
+      <main className="md:ml-64 pt-24 pb-32 px-6 max-w-7xl mx-auto w-full flex-grow">
+        
+        {/* Title and Intro */}
+        <section className="mb-8">
+          <h1 className="text-3xl font-bold text-on-surface">
             Control de Acceso y Operadores
           </h1>
-          <p className="font-body-md text-body-md text-on-surface-variant mt-sm max-w-3xl">
+          <p className="text-on-surface-variant mt-2 max-w-3xl">
             Gestione los permisos del sistema. Asigne a cada operador los municipios específicos cuya información está autorizado a registrar y auditar.
           </p>
         </section>
 
-        {/* Bento Grid Stats */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-gutter mb-xl">
-          <div className="bg-surface-container-lowest rounded-2xl p-md border border-outline-variant/30 shadow-custom-sm flex items-center gap-md">
+        {/* Stats Bento Grid */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 shadow-sm flex items-center gap-4">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
               <span className="material-symbols-outlined text-[28px]">group</span>
             </div>
             <div>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Usuarios Totales</p>
-              <h2 className="text-headline-lg font-bold text-on-surface">{users.length}</h2>
+              <p className="text-xs text-on-surface-variant font-medium">Usuarios Totales</p>
+              <h2 className="text-2xl font-bold text-on-surface">{totalUsers}</h2>
             </div>
           </div>
 
-          <div className="bg-surface-container-lowest rounded-2xl p-md border border-outline-variant/30 shadow-custom-sm flex items-center gap-md">
-            <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center text-secondary">
+          <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-tertiary/10 rounded-xl flex items-center justify-center text-tertiary">
               <span className="material-symbols-outlined text-[28px]">shield_person</span>
             </div>
             <div>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Administradores</p>
-              <h2 className="text-headline-lg font-bold text-on-surface">
-                {users.filter(u => u.role === 'admin').length}
-              </h2>
+              <p className="text-xs text-on-surface-variant font-medium">Administradores</p>
+              <h2 className="text-2xl font-bold text-on-surface">{adminUsersCount}</h2>
             </div>
           </div>
 
-          <div className="bg-surface-container-lowest rounded-2xl p-md border border-outline-variant/30 shadow-custom-sm flex items-center gap-md">
-            <div className="w-12 h-12 bg-tertiary/10 rounded-xl flex items-center justify-center text-tertiary">
-              <span className="material-symbols-outlined text-[28px]">location_city</span>
+          <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center text-secondary">
+              <span className="material-symbols-outlined text-[28px]">badge</span>
             </div>
             <div>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Municipios Totales</p>
-              <h2 className="text-headline-lg font-bold text-on-surface">{municipios.length}</h2>
+              <p className="text-xs text-on-surface-variant font-medium">Técnicos Municipales</p>
+              <h2 className="text-2xl font-bold text-on-surface">{tecnicoUsersCount}</h2>
+            </div>
+          </div>
+
+          <div className="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/30 shadow-sm flex items-center gap-4">
+            <div className="w-12 h-12 bg-error-container text-on-error-container rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-[28px]">block</span>
+            </div>
+            <div>
+              <p className="text-xs text-on-surface-variant font-medium">Inactivos</p>
+              <h2 className="text-2xl font-bold text-on-surface">{inactiveUsersCount}</h2>
             </div>
           </div>
         </section>
 
-        {/* Controls: Search and Filters */}
-        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-custom-sm p-md mb-lg flex flex-col md:flex-row items-center justify-between gap-md">
-          <div className="relative w-full md:w-96">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">
+        {/* Filter Controls */}
+        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-4 mb-6 flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="relative w-full lg:w-96">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant">
               search
             </span>
             <input
               type="text"
-              className="w-full pl-10 pr-4 py-2.5 bg-surface-container rounded-xl border border-outline-variant/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-all"
+              className="w-full pl-10 pr-4 py-2.5 bg-surface-container-low rounded-xl border border-outline-variant/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm transition-all"
               placeholder="Buscar por nombre o correo..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
-          <div className="flex items-center gap-sm w-full md:w-auto overflow-x-auto">
-            <span className="font-label-md text-label-md text-on-surface-variant whitespace-nowrap">Filtrar por:</span>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setRoleFilter('all')}
-                className={`px-4 py-1.5 rounded-full font-label-sm text-label-sm font-semibold transition-all border cursor-pointer ${
-                  roleFilter === 'all'
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high'
-                }`}
-              >
-                Todos
-              </button>
-              <button 
-                onClick={() => setRoleFilter('admin')}
-                className={`px-4 py-1.5 rounded-full font-label-sm text-label-sm font-semibold transition-all border cursor-pointer ${
-                  roleFilter === 'admin'
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high'
-                }`}
-              >
-                Administradores
-              </button>
-              <button 
-                onClick={() => setRoleFilter('user')}
-                className={`px-4 py-1.5 rounded-full font-label-sm text-label-sm font-semibold transition-all border cursor-pointer ${
-                  roleFilter === 'user'
-                    ? 'bg-primary text-on-primary border-primary'
-                    : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high'
-                }`}
-              >
-                Usuarios comunes
-              </button>
+          <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-on-surface-variant whitespace-nowrap">Rol:</span>
+              <div className="flex bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
+                <button 
+                  onClick={() => setRoleFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    roleFilter === 'all'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button 
+                  onClick={() => setRoleFilter('admin')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    roleFilter === 'admin'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Admin
+                </button>
+                <button 
+                  onClick={() => setRoleFilter('tecnico_municipal')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    roleFilter === 'tecnico_municipal'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Técnico
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-on-surface-variant whitespace-nowrap">Estado:</span>
+              <div className="flex bg-surface-container-low p-1 rounded-xl border border-outline-variant/30">
+                <button 
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    statusFilter === 'all'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button 
+                  onClick={() => setStatusFilter('active')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    statusFilter === 'active'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Activos
+                </button>
+                <button 
+                  onClick={() => setStatusFilter('inactive')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    statusFilter === 'inactive'
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  Inactivos
+                </button>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Users Table / Grid Layout */}
-        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-custom-sm overflow-hidden">
+        {/* Users List Container */}
+        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
           {loading ? (
-            <div className="p-xl text-center space-y-md">
+            <div className="p-12 text-center space-y-4">
               <span className="material-symbols-outlined text-[40px] animate-spin text-primary">sync</span>
-              <p className="font-body-md text-body-md text-on-surface-variant">Cargando operadores del sistema...</p>
+              <p className="text-sm text-on-surface-variant">Cargando operadores del sistema...</p>
             </div>
           ) : filteredUsers.length === 0 ? (
-            <div className="p-xl text-center">
-              <span className="material-symbols-outlined text-[48px] text-outline">group_off</span>
-              <p className="font-headline-md text-headline-md text-on-surface mt-md">Sin resultados</p>
-              <p className="font-body-md text-body-md text-on-surface-variant mt-sm">
+            <div className="p-12 text-center">
+              <span className="material-symbols-outlined text-[48px] text-on-surface-variant">group_off</span>
+              <p className="text-lg font-bold text-on-surface mt-4">Sin resultados</p>
+              <p className="text-sm text-on-surface-variant mt-1">
                 No se encontraron usuarios que coincidan con la búsqueda o filtro seleccionado.
               </p>
             </div>
@@ -480,90 +501,133 @@ export default function UserManagement() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-surface-container border-b border-outline-variant/50">
-                    <th className="p-md font-label-md text-label-md text-on-surface font-bold">Operador / Correo</th>
-                    <th className="p-md font-label-md text-label-md text-on-surface font-bold">Rol</th>
-                    <th className="p-md font-label-md text-label-md text-on-surface font-bold">Municipios Asignados</th>
-                    <th className="p-md font-label-md text-label-md text-on-surface font-bold text-center">Acciones</th>
+                    <th className="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Nombre / Email</th>
+                    <th className="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Rol</th>
+                    <th className="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Municipios Asignados</th>
+                    <th className="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Estado</th>
+                    <th className="p-4 text-xs font-bold text-on-surface-variant uppercase tracking-wider text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/20">
-                  {filteredUsers.map((item) => (
-                    <tr key={item.id} className="hover:bg-surface-container-low/50 transition-colors">
-                      {/* Name / Email */}
-                      <td className="p-md">
-                        <div className="flex items-center gap-md">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
-                            {(item.full_name || item.email).charAt(0).toUpperCase()}
+                  {filteredUsers.map((item) => {
+                    const isCurrentUser = item.id === authUser?.id || item.id === authProfile?.id
+                    return (
+                      <tr 
+                        key={item.id} 
+                        className={`transition-colors hover:bg-surface-container-low/40 ${
+                          !item.activo ? 'opacity-60' : ''
+                        }`}
+                      >
+                        {/* Name & Email */}
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold">
+                              {(item.full_name || item.email || '?').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-on-surface text-sm">
+                                {item.full_name || 'Sin Nombre'}
+                              </div>
+                              <div className="text-xs text-on-surface-variant mt-0.5">
+                                {item.email}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="font-headline-md text-[16px] text-on-surface font-semibold">{item.full_name || 'Sin Nombre'}</div>
-                            <div className="font-body-md text-[13px] text-on-surface-variant mt-0.5">{item.email}</div>
-                          </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Role Badge */}
-                      <td className="p-md">
-                        <span className={`px-3 py-1 rounded-full font-label-sm text-label-sm font-bold uppercase tracking-wider ${
-                          item.role === 'admin' 
-                            ? 'bg-tertiary-container text-on-tertiary-container' 
-                            : 'bg-surface-container text-on-surface-variant'
-                        }`}>
-                          {item.role}
-                        </span>
-                      </td>
+                        {/* Role Badge */}
+                        <td className="p-4">
+                          {item.role === 'admin' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-tertiary-container text-on-tertiary-container">
+                              <span className="material-symbols-outlined text-[16px]">shield_person</span>
+                              Admin
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-secondary-container text-on-secondary-container">
+                              <span className="material-symbols-outlined text-[16px]">badge</span>
+                              Técnico Municipal
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Municipios chips */}
-                      <td className="p-md">
-                        {item.role === 'admin' ? (
-                          <span className="text-on-surface-variant/70 italic text-sm">
-                            Acceso global (Admin)
-                          </span>
-                        ) : (
-                          <div className="flex flex-wrap gap-xs items-center">
-                            {item.user_municipios && item.user_municipios.length > 0 ? (
-                              item.user_municipios.map((um) => (
-                                <div 
-                                  key={um.idmunicipio} 
-                                  className="flex items-center gap-1 bg-surface-container-high text-on-surface px-2.5 py-1 rounded-lg text-sm border border-outline-variant/20 group/chip"
-                                >
-                                  <span>{um.municipios?.nombre || 'Municipio'}</span>
-                                  <button
-                                    onClick={() => handleRemoveAssignment(item.id, um.idmunicipio)}
-                                    className="material-symbols-outlined text-[14px] text-outline hover:text-error transition-colors bg-transparent border-none cursor-pointer"
-                                    title="Quitar asignación"
+                        {/* Municipality Assignments */}
+                        <td className="p-4">
+                          {item.role === 'admin' ? (
+                            <span className="text-on-surface-variant/80 italic text-xs font-medium bg-surface-container px-2.5 py-1 rounded-lg">
+                              Acceso global
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5 items-center">
+                              {item.user_municipios && item.user_municipios.length > 0 ? (
+                                item.user_municipios.map((um) => (
+                                  <div 
+                                    key={um.idmunicipio} 
+                                    className="inline-flex items-center gap-1 bg-surface-container text-on-surface px-2 py-0.5 rounded-lg text-xs border border-outline-variant/30"
                                   >
-                                    close
-                                  </button>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-error font-semibold text-xs bg-error-container/40 px-2 py-1 rounded">
-                                Ninguno asignado
+                                    <span>{um.municipios?.nombre || 'Municipio'}</span>
+                                    <button
+                                      onClick={() => handleRemoveAssignment(item.id, um.idmunicipio)}
+                                      className="material-symbols-outlined text-[14px] text-on-surface-variant hover:text-error transition-colors bg-transparent border-none cursor-pointer leading-none"
+                                      title="Quitar asignación"
+                                    >
+                                      close
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-xs text-on-surface-variant italic">
+                                  Sin asignaciones
+                                </span>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedUserForAssign(item)
+                                  setIsAssignModalOpen(true)
+                                  setMuniToAssign('')
+                                }}
+                                className="inline-flex items-center gap-0.5 text-primary hover:bg-primary/5 px-2 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer border-none bg-transparent"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">add</span>
+                                Asignar
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Status Toggle / Badge */}
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            {!item.activo && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-error-container text-on-error-container">
+                                <span className="material-symbols-outlined text-[12px]">block</span>
+                                Inactivo
                               </span>
                             )}
                             <button
-                              onClick={() => openAssignModal(item)}
-                              className="text-primary hover:bg-primary/10 px-2 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-xs cursor-pointer border-none bg-transparent"
+                              onClick={() => handleToggleActivo(item.id, item.activo, isCurrentUser)}
+                              className={`material-symbols-outlined text-[32px] transition-colors bg-transparent border-none cursor-pointer leading-none select-none ${
+                                item.activo ? 'text-primary' : 'text-on-surface-variant/50'
+                              }`}
+                              title={item.activo ? 'Desactivar usuario' : 'Activar usuario'}
                             >
-                              <span className="material-symbols-outlined text-[14px]">add</span>
-                              Asignar
+                              {item.activo ? 'toggle_on' : 'toggle_off'}
                             </button>
                           </div>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Action buttons */}
-                      <td className="p-md text-center">
-                        <button
-                          onClick={() => handleToggleRole(item.id, item.role)}
-                          className="bg-surface-container-high hover:bg-primary-container hover:text-on-primary text-on-surface-variant font-label-sm text-label-sm px-4 py-2 rounded-xl transition-all font-semibold cursor-pointer border-none"
-                        >
-                          Cambiar a {item.role === 'admin' ? 'Usuario' : 'Admin'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        {/* Actions Toggle Role */}
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => handleToggleRole(item.id, item.role)}
+                            className="inline-flex items-center gap-1.5 bg-surface-container-high hover:bg-primary hover:text-on-primary text-on-surface-variant font-semibold text-xs px-3.5 py-2 rounded-xl transition-all cursor-pointer border-none"
+                          >
+                            <span className="material-symbols-outlined text-sm">swap_horiz</span>
+                            Cambiar a {item.role === 'admin' ? 'Técnico' : 'Admin'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -573,25 +637,25 @@ export default function UserManagement() {
 
       {/* Assign Municipality Modal */}
       {isAssignModalOpen && selectedUserForAssign && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant w-[95%] max-w-[450px] p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-lg border border-outline-variant w-full max-w-[450px] p-6 space-y-4">
             <div>
-              <h2 className="text-headline-md font-bold text-primary">Asignar Jurisdicción</h2>
-              <p className="font-body-md text-body-md text-on-surface-variant mt-sm">
-                Seleccione el municipio a asignar a <span className="font-semibold text-on-surface">{selectedUserForAssign.full_name}</span>.
+              <h2 className="text-xl font-bold text-primary">Asignar Jurisdicción</h2>
+              <p className="text-sm text-on-surface-variant mt-1">
+                Seleccione el municipio a asignar a <span className="font-semibold text-on-surface">{selectedUserForAssign.full_name || selectedUserForAssign.email}</span>.
               </p>
             </div>
 
             <form onSubmit={handleConfirmAssign} className="w-full space-y-4">
-              <div className="space-y-sm">
-                <label className="block text-label-md text-on-surface font-semibold" htmlFor="muniSelect">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider" htmlFor="muniSelect">
                   Municipio disponible
                 </label>
                 <div className="relative">
                   <select
                     id="muniSelect"
                     required
-                    className="w-full h-12 pl-4 pr-10 bg-surface-container rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body-md text-body-md appearance-none cursor-pointer"
+                    className="w-full h-12 pl-4 pr-10 bg-surface-container rounded-xl border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-sm appearance-none cursor-pointer text-on-surface"
                     value={muniToAssign}
                     onChange={(e) => setMuniToAssign(e.target.value)}
                   >
@@ -603,24 +667,28 @@ export default function UserManagement() {
                       ))
                     }
                   </select>
-                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline pointer-events-none">
+                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none">
                     expand_more
                   </span>
                 </div>
               </div>
 
-              <div className="flex gap-sm justify-end">
+              <div className="flex gap-2 justify-end pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsAssignModalOpen(false)}
-                  className="px-lg py-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high text-label-md transition-colors"
+                  onClick={() => {
+                    setIsAssignModalOpen(false)
+                    setSelectedUserForAssign(null)
+                    setMuniToAssign('')
+                  }}
+                  className="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container text-sm font-semibold transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={!muniToAssign}
-                  className="px-lg py-sm rounded-xl bg-primary text-on-primary hover:bg-primary-container text-label-md font-bold transition-all disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl bg-primary text-on-primary hover:opacity-95 text-sm font-bold transition-all disabled:opacity-50"
                 >
                   Asignar Municipio
                 </button>

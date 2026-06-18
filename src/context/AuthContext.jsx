@@ -8,6 +8,8 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  const [municipiosAsignados, setMunicipiosAsignados] = useState([])
+
   async function fetchProfile(userId) {
     const { data } = await supabase
       .from('profiles')
@@ -15,6 +17,16 @@ export function AuthProvider({ children }) {
       .eq('id', userId)
       .single()
     setProfile(data)
+
+    if (data?.role !== 'admin') {
+      const { data: muniData } = await supabase
+        .from('user_municipios')
+        .select('idmunicipio, municipios(id, nombre)')
+        .eq('user_id', userId)
+      setMunicipiosAsignados(muniData || [])
+    } else {
+      setMunicipiosAsignados([])
+    }
   }
 
   useEffect(() => {
@@ -48,7 +60,7 @@ export function AuthProvider({ children }) {
   const signOut = () => supabase.auth.signOut()
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, municipiosAsignados, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   )

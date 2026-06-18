@@ -5,17 +5,33 @@ import { useAuth } from '../context/AuthContext'
 export default function SlideBar({ isOpen, onClose }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signOut, isAdmin, profile, user } = useAuth()
+  const { signOut, isAdmin, profile, municipiosAsignados } = useAuth()
+
+  const handleMunicipiosNav = () => {
+    if (!isAdmin && municipiosAsignados.length === 1) {
+      handleNavigate(`/municipio/${municipiosAsignados[0].idmunicipio}`)
+    } else {
+      handleNavigate('/')
+    }
+  }
 
   const currentPath = location.pathname
 
+  const municipiosPath = (!isAdmin && municipiosAsignados.length === 1)
+    ? `/municipio/${municipiosAsignados[0].idmunicipio}`
+    : '/'
+
   const menuItems = [
     {
-      name: 'Municipios',
+      name: municipiosAsignados.length === 1 && !isAdmin
+        ? municipiosAsignados[0].municipios?.nombre || 'Mi Municipio'
+        : 'Municipios',
       icon: 'location_city',
-      path: '/',
+      path: municipiosPath,
       adminOnly: false,
-      desc: 'Lista y autodiagnósticos'
+      desc: municipiosAsignados.length === 1 && !isAdmin
+        ? 'Dashboard y autodiagnóstico'
+        : 'Lista y autodiagnósticos'
     },
     {
       name: 'Usuarios',

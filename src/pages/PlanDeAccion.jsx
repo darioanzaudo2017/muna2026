@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-export default function PlanDeAccion({ 
-  isDashboardTab = false, 
+export default function PlanDeAccion({
+  isDashboardTab = false,
   idMunicipio: idMunicipioProp,
   triggerAddLine = 0,
   triggerAddAction = 0
@@ -26,6 +26,7 @@ export default function PlanDeAccion({
   const [expandedLines, setExpandedLines] = useState({})
   const [expandedActions, setExpandedActions] = useState({})
   const [toast, setToast] = useState(null)
+  const [localIndicadorValues, setLocalIndicadorValues] = useState({})
 
   // Estados de Formularios / Modales
   const [lineModal, setLineModal] = useState({ open: false, data: null })
@@ -385,7 +386,7 @@ export default function PlanDeAccion({
       {!isDashboardTab && (
         <header className="bg-surface-container-low border-b border-outline-variant px-gutter py-md flex flex-col md:flex-row md:items-center justify-between gap-md">
           <div>
-            <button 
+            <button
               onClick={() => navigate(`/municipio/${idMunicipio}`)}
               className="flex items-center gap-1 text-label-md text-primary font-bold hover:underline mb-1 cursor-pointer bg-transparent border-none"
             >
@@ -399,29 +400,37 @@ export default function PlanDeAccion({
       )}
 
       {/* Tabs */}
-      <div className={`flex border-b border-outline-variant ${isDashboardTab ? '' : 'bg-surface-container-low px-gutter'}`}>
+      <div className={`flex flex-wrap items-center justify-between border-b border-outline-variant ${isDashboardTab ? '' : 'bg-surface-container-low px-gutter'}`}>
+        <div className="flex">
+          <button
+            onClick={() => setActiveTab('acciones')}
+            className={`px-8 py-4 font-headline-md text-headline-md flex items-center gap-2 border-none bg-transparent cursor-pointer transition-all ${activeTab === 'acciones' ? 'border-b-2 border-primary text-primary font-bold' : 'text-on-surface-variant font-medium'
+              }`}
+          >
+            <span className="material-symbols-outlined">assignment</span>
+            Acciones y Seguimiento
+          </button>
+          <button
+            onClick={() => setActiveTab('metas')}
+            className={`px-8 py-4 font-headline-md text-headline-md flex items-center gap-2 border-none bg-transparent cursor-pointer transition-all ${activeTab === 'metas' ? 'border-b-2 border-primary text-primary font-bold' : 'text-on-surface-variant font-medium'
+              }`}
+          >
+            <span className="material-symbols-outlined">insights</span>
+            Metas e Indicadores
+          </button>
+        </div>
+
         <button
-          onClick={() => setActiveTab('acciones')}
-          className={`px-8 py-4 font-headline-md text-headline-md flex items-center gap-2 border-none bg-transparent cursor-pointer transition-all ${
-            activeTab === 'acciones' ? 'border-b-2 border-primary text-primary font-bold' : 'text-on-surface-variant font-medium'
-          }`}
+          onClick={() => navigate(`/municipio/${idMunicipio}/plan-de-accion/resumen`)}
+          className="mx-4 my-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer border-none text-sm self-center"
         >
-          <span className="material-symbols-outlined">assignment</span>
-          Acciones y Seguimiento
-        </button>
-        <button
-          onClick={() => setActiveTab('metas')}
-          className={`px-8 py-4 font-headline-md text-headline-md flex items-center gap-2 border-none bg-transparent cursor-pointer transition-all ${
-            activeTab === 'metas' ? 'border-b-2 border-primary text-primary font-bold' : 'text-on-surface-variant font-medium'
-          }`}
-        >
-          <span className="material-symbols-outlined">insights</span>
-          Metas e Indicadores
+          <span className="material-symbols-outlined text-[18px]">print</span>
+          <span>Vista de Impresión (PDF)</span>
         </button>
       </div>
 
       <main className={isDashboardTab ? "pt-md" : "px-gutter pt-lg flex-1 max-w-7xl w-full mx-auto"}>
-        
+
         {/* ==================== TAB ACCIONES ==================== */}
         {activeTab === 'acciones' && (
           <div className="space-y-md">
@@ -446,11 +455,11 @@ export default function PlanDeAccion({
               lines.map((line) => {
                 const lineActions = actions.filter(a => a.idlinea_municipio === line.id)
                 const isOpen = !!expandedLines[line.id]
-                
+
                 return (
                   <div key={line.id} className="bg-surface-container rounded-2xl border border-outline-variant overflow-hidden shadow-custom-sm">
                     {/* Fila Cabecera de la Línea */}
-                    <header 
+                    <header
                       onClick={() => toggleLine(line.id)}
                       className="flex items-center justify-between p-lg cursor-pointer hover:bg-surface-container-high transition-colors"
                     >
@@ -464,7 +473,7 @@ export default function PlanDeAccion({
                         </p>
                       </div>
                       <div className="flex items-center gap-md">
-                        <button 
+                        <button
                           onClick={(e) => {
                             e.stopPropagation()
                             setLineModal({ open: true, data: line })
@@ -486,10 +495,10 @@ export default function PlanDeAccion({
                     {/* Contenido Expandible de la Línea */}
                     {isOpen && (
                       <div className="p-lg bg-surface-container-lowest border-t border-outline-variant space-y-md">
-                        
+
                         {/* Botón de Alta de Acción */}
                         <div className="flex justify-end">
-                          <button 
+                          <button
                             onClick={() => setActionModal({ open: true, data: null, lineId: line.id })}
                             className="bg-primary text-on-primary font-bold px-5 py-2.5 rounded-full flex items-center gap-2 border-none cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-sm"
                           >
@@ -524,9 +533,9 @@ export default function PlanDeAccion({
                                       </div>
                                       <p className="font-body-md text-on-surface-variant">{act.descripcion || 'Sin descripción.'}</p>
                                     </div>
-                                    
+
                                     <div className="flex items-center gap-xs shrink-0 self-end md:self-auto">
-                                      <button 
+                                      <button
                                         onClick={() => setActionModal({ open: true, data: act, lineId: line.id })}
                                         className="p-2 text-primary hover:bg-primary/5 rounded-full cursor-pointer bg-transparent border-none transition-colors"
                                         title="Editar Iniciativa"
@@ -566,7 +575,7 @@ export default function PlanDeAccion({
                                     {isActOpen && (
                                       <div className="mt-md pl-md border-l border-outline space-y-md animate-fade-in">
                                         <div className="flex justify-end">
-                                          <button 
+                                          <button
                                             onClick={() => setInterventionModal({ open: true, actionId: act.id })}
                                             className="text-primary hover:bg-primary/5 border border-primary font-label-sm px-3.5 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer transition-all bg-transparent font-bold"
                                           >
@@ -589,9 +598,9 @@ export default function PlanDeAccion({
                                                     {int.fecha}
                                                   </span>
                                                   {int.adjunto_url && (
-                                                    <a 
-                                                      href={int.adjunto_url} 
-                                                      target="_blank" 
+                                                    <a
+                                                      href={int.adjunto_url}
+                                                      target="_blank"
                                                       rel="noopener noreferrer"
                                                       className="text-primary hover:underline text-label-sm font-bold flex items-center gap-1"
                                                     >
@@ -627,7 +636,7 @@ export default function PlanDeAccion({
           <div className="space-y-md">
             <div className="flex justify-between items-center mb-md">
               <h2 className="font-headline-md text-headline-md font-bold">Metas y KPIs del Municipio</h2>
-              <button 
+              <button
                 onClick={() => setMetaModal({ open: true, data: null })}
                 className="bg-primary text-on-primary font-bold px-6 py-3 rounded-full flex items-center gap-2 border-none cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-sm"
               >
@@ -645,7 +654,7 @@ export default function PlanDeAccion({
                   <h3 className="font-label-md text-outline uppercase tracking-widest pl-2">
                     {line.lista_lineas_tematicas?.nombre || `Línea Temática ${line.idlinea}`}
                   </h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
                     {lineGoals.map((meta) => {
                       const metaBadge = getMetaStatusBadge(meta.estado)
@@ -654,20 +663,20 @@ export default function PlanDeAccion({
                         : 0
 
                       // Buscar acciones vinculadas
-                      const linkedActions = actions.filter(act => 
+                      const linkedActions = actions.filter(act =>
                         pivotLinks.some(link => link.id_meta === meta.id && link.id_accion === act.id)
                       )
 
                       return (
                         <div key={meta.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant p-lg shadow-custom-sm flex flex-col justify-between gap-md">
-                          
+
                           <div className="space-y-sm">
                             <div className="flex justify-between items-start gap-md">
                               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${metaBadge.css}`}>
                                 {metaBadge.text}
                               </span>
                               <div className="flex items-center gap-xs">
-                                <button 
+                                <button
                                   onClick={() => setMetaModal({ open: true, data: meta })}
                                   className="p-1.5 text-primary hover:bg-primary/5 rounded-full cursor-pointer bg-transparent border-none transition-colors"
                                   title="Editar Meta"
@@ -678,7 +687,7 @@ export default function PlanDeAccion({
                             </div>
 
                             <p className="font-headline-sm text-headline-sm font-bold text-on-surface">{meta.meta}</p>
-                            
+
                             <div className="space-y-1.5">
                               <span className="text-label-sm text-outline uppercase tracking-wider block">Indicador</span>
                               <p className="font-body-md text-on-surface-variant font-medium">{meta.indicador || 'No especificado'}</p>
@@ -703,13 +712,19 @@ export default function PlanDeAccion({
                                 <span className="text-[10px] text-outline uppercase block">Base</span>
                                 <span className="font-label-md font-bold">{meta.indicador_base}</span>
                               </div>
-                              
+
                               <div className="text-center">
                                 <span className="text-[10px] text-outline uppercase block">Actual</span>
-                                <input 
+                                <input
                                   type="number"
-                                  value={meta.indicador_valor}
-                                  onChange={(e) => handleUpdateIndicatorValue(meta.id, e.target.value)}
+                                  value={localIndicadorValues[meta.id] ?? meta.indicador_valor ?? 0}
+                                  onChange={(e) => setLocalIndicadorValues(prev => ({ ...prev, [meta.id]: e.target.value }))}
+                                  onBlur={(e) => {
+                                    const val = e.target.value
+                                    if (Number(val) !== Number(meta.indicador_valor)) {
+                                      handleUpdateIndicatorValue(meta.id, val)
+                                    }
+                                  }}
                                   className="w-full text-center bg-surface-container-lowest border border-outline-variant rounded-md font-label-md font-bold text-primary py-0.5 max-w-[60px] mx-auto focus:outline-primary"
                                 />
                               </div>
@@ -765,7 +780,7 @@ export default function PlanDeAccion({
 
       {/* ==================== MODAL LÍNEA TEMÁTICA ==================== */}
       {lineModal.open && (
-        <LineFormModal 
+        <LineFormModal
           isOpen={lineModal.open}
           data={lineModal.data}
           masterLines={masterLines}
@@ -777,7 +792,7 @@ export default function PlanDeAccion({
 
       {/* ==================== MODAL ACCION ==================== */}
       {actionModal.open && (
-        <ActionFormModal 
+        <ActionFormModal
           isOpen={actionModal.open}
           data={actionModal.data}
           onClose={() => setActionModal({ open: false, data: null, lineId: null })}
@@ -787,7 +802,7 @@ export default function PlanDeAccion({
 
       {/* ==================== MODAL INTERVENCION ==================== */}
       {interventionModal.open && (
-        <InterventionFormModal 
+        <InterventionFormModal
           isOpen={interventionModal.open}
           onClose={() => setInterventionModal({ open: false, actionId: null })}
           onSave={handleSaveIntervention}
@@ -796,7 +811,7 @@ export default function PlanDeAccion({
 
       {/* ==================== MODAL META ==================== */}
       {metaModal.open && (
-        <MetaFormModal 
+        <MetaFormModal
           isOpen={metaModal.open}
           data={metaModal.data}
           lines={lines}
@@ -809,11 +824,10 @@ export default function PlanDeAccion({
 
       {/* ==================== TOAST NOTIFICATION ==================== */}
       {toast && (
-        <div className={`fixed bottom-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg border flex items-center gap-2 animate-fade-in ${
-          toast.type === 'error' 
-            ? 'bg-error-container text-error border-error/20' 
+        <div className={`fixed bottom-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg border flex items-center gap-2 animate-fade-in ${toast.type === 'error'
+            ? 'bg-error-container text-error border-error/20'
             : 'bg-secondary-container text-on-secondary-container border-secondary/20'
-        }`}>
+          }`}>
           <span className="material-symbols-outlined">
             {toast.type === 'error' ? 'error' : 'check_circle'}
           </span>
@@ -867,7 +881,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
           {/* Nombre */}
           <div className="md:col-span-2 space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Nombre de la Iniciativa *</label>
-            <input 
+            <input
               type="text"
               value={formData.nombre_iniciativa}
               onChange={(e) => setFormData({ ...formData, nombre_iniciativa: e.target.value })}
@@ -879,7 +893,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
           {/* Descripción */}
           <div className="md:col-span-2 space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Descripción</label>
-            <textarea 
+            <textarea
               value={formData.descripcion}
               onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
               className="w-full bg-surface border border-outline rounded-xl px-md py-sm focus:outline-primary font-body-md min-h-[80px]"
@@ -890,7 +904,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
           {/* Responsable */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Responsable / Area</label>
-            <input 
+            <input
               type="text"
               value={formData.responsable}
               onChange={(e) => setFormData({ ...formData, responsable: e.target.value })}
@@ -902,7 +916,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
           {/* Población Objetivo */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Población Objetivo</label>
-            <input 
+            <input
               type="text"
               value={formData.poblacion_objetivo}
               onChange={(e) => setFormData({ ...formData, poblacion_objetivo: e.target.value })}
@@ -914,7 +928,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
           {/* Resultado Esperado */}
           <div className="md:col-span-2 space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Resultado Esperado</label>
-            <input 
+            <input
               type="text"
               value={formData.resultado_esperado}
               onChange={(e) => setFormData({ ...formData, resultado_esperado: e.target.value })}
@@ -952,14 +966,14 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
         </div>
 
         <div className="flex justify-end gap-sm pt-md border-t border-outline-variant">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="px-6 py-2.5 font-label-md text-outline hover:bg-surface-container rounded-full cursor-pointer bg-transparent border-none"
           >
             Cancelar
           </button>
-          <button 
-            onClick={() => onSave(formData)} 
+          <button
+            onClick={() => onSave(formData)}
             className="bg-primary text-on-primary font-bold px-6 py-2.5 rounded-full cursor-pointer hover:opacity-90 active:scale-95 transition-all border-none"
           >
             Guardar
@@ -1039,9 +1053,8 @@ function InterventionFormModal({ isOpen, onClose, onSave }) {
 
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Adjunto (Opcional)</label>
-            <label className={`flex items-center gap-3 w-full px-md py-sm border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
-              file ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline bg-surface'
-            }`}>
+            <label className={`flex items-center gap-3 w-full px-md py-sm border-2 border-dashed rounded-xl cursor-pointer transition-colors ${file ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline bg-surface'
+              }`}>
               <span className="material-symbols-outlined text-outline">upload_file</span>
               <span className="font-body-md text-on-surface-variant truncate">
                 {file ? file.name : 'Seleccionar archivo (PDF, imagen, Word)'}
@@ -1132,7 +1145,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
     if (selLineId) {
       const filtered = actions.filter(act => act.idlinea_municipio === selLineId)
       setAvailableActions(filtered)
-      
+
       // Limpiar seleccionadas que ya no aplican a la nueva línea (solo en creación)
       if (!data) {
         setSelectedActionIds([])
@@ -1141,9 +1154,9 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
   }, [formData.id_linea_municipio, actions, data])
 
   const handleToggleAction = (actionId) => {
-    setSelectedActionIds(prev => 
-      prev.includes(actionId) 
-        ? prev.filter(id => id !== actionId) 
+    setSelectedActionIds(prev =>
+      prev.includes(actionId)
+        ? prev.filter(id => id !== actionId)
         : [...prev, actionId]
     )
   }
@@ -1182,7 +1195,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Texto de la Meta */}
           <div className="md:col-span-2 space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Meta / Objetivo Específico *</label>
-            <textarea 
+            <textarea
               value={formData.meta}
               onChange={(e) => setFormData({ ...formData, meta: e.target.value })}
               className="w-full bg-surface border border-outline rounded-xl px-md py-sm focus:outline-primary font-body-md min-h-[60px]"
@@ -1193,7 +1206,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Indicador */}
           <div className="md:col-span-2 space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Nombre del Indicador (Métrica de Medición)</label>
-            <input 
+            <input
               type="text"
               value={formData.indicador}
               onChange={(e) => setFormData({ ...formData, indicador: e.target.value })}
@@ -1205,7 +1218,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Indicador Base */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Valor Base</label>
-            <input 
+            <input
               type="number"
               value={formData.indicador_base}
               onChange={(e) => setFormData({ ...formData, indicador_base: e.target.value })}
@@ -1216,7 +1229,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Indicador Objetivo */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Valor Objetivo (Meta)</label>
-            <input 
+            <input
               type="number"
               value={formData.indicador_objetivo}
               onChange={(e) => setFormData({ ...formData, indicador_objetivo: e.target.value })}
@@ -1227,7 +1240,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Indicador Valor Actual */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Valor Actual</label>
-            <input 
+            <input
               type="number"
               value={formData.indicador_valor}
               onChange={(e) => setFormData({ ...formData, indicador_valor: e.target.value })}
@@ -1253,7 +1266,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Fecha Inicio */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Fecha de Inicio</label>
-            <input 
+            <input
               type="date"
               value={formData.fecha_inicio}
               onChange={(e) => setFormData({ ...formData, fecha_inicio: e.target.value })}
@@ -1264,7 +1277,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Fecha Final */}
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Fecha de Finalización</label>
-            <input 
+            <input
               type="date"
               value={formData.fecha_final}
               onChange={(e) => setFormData({ ...formData, fecha_final: e.target.value })}
@@ -1275,7 +1288,7 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
           {/* Selección Múltiple de Acciones de la misma Línea */}
           <div className="md:col-span-2 space-y-2 pt-sm">
             <label className="font-label-md text-on-surface-variant font-bold block">Vincular Iniciativas Asocidas</label>
-            
+
             {availableActions.length === 0 ? (
               <p className="text-label-md text-on-surface-variant/70 italic bg-surface p-sm rounded-xl border border-outline-variant/30">
                 Primero cree iniciativas/acciones dentro de esta línea temática para poder vincularlas.
@@ -1285,14 +1298,13 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
                 {availableActions.map(act => {
                   const isChecked = selectedActionIds.includes(act.id)
                   return (
-                    <div 
-                      key={act.id} 
+                    <div
+                      key={act.id}
                       onClick={() => handleToggleAction(act.id)}
-                      className={`flex items-center gap-sm px-md py-sm rounded-lg border cursor-pointer select-none transition-all ${
-                        isChecked 
-                          ? 'bg-primary/10 border-primary text-primary font-bold' 
+                      className={`flex items-center gap-sm px-md py-sm rounded-lg border cursor-pointer select-none transition-all ${isChecked
+                          ? 'bg-primary/10 border-primary text-primary font-bold'
                           : 'border-outline-variant text-on-surface hover:bg-surface-container'
-                      }`}
+                        }`}
                     >
                       <span className="material-symbols-outlined text-[20px]">
                         {isChecked ? 'check_box' : 'check_box_outline_blank'}
@@ -1307,14 +1319,14 @@ function MetaFormModal({ isOpen, data, lines, actions, pivotLinks, onClose, onSa
         </div>
 
         <div className="flex justify-end gap-sm pt-md border-t border-outline-variant">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="px-6 py-2.5 font-label-md text-outline hover:bg-surface-container rounded-full cursor-pointer bg-transparent border-none"
           >
             Cancelar
           </button>
-          <button 
-            onClick={() => onSave(formData, selectedActionIds)} 
+          <button
+            onClick={() => onSave(formData, selectedActionIds)}
             className="bg-primary text-on-primary font-bold px-6 py-2.5 rounded-full cursor-pointer hover:opacity-90 active:scale-95 transition-all border-none"
           >
             Guardar
@@ -1348,7 +1360,7 @@ function LineFormModal({ isOpen, data, masterLines, adoptedLines, onClose, onSav
   }, [data, masterLines, adoptedLines, isOpen])
 
   // Filtrar para el selector las que no han sido adoptadas
-  const availableLines = data 
+  const availableLines = data
     ? masterLines // En edición mostramos todas (o la seleccionada)
     : masterLines.filter(ml => !adoptedLines.some(al => al.idlinea === ml.id))
 
@@ -1404,14 +1416,14 @@ function LineFormModal({ isOpen, data, masterLines, adoptedLines, onClose, onSav
         </div>
 
         <div className="flex justify-end gap-sm pt-md border-t border-outline-variant">
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="px-6 py-2.5 font-label-md text-outline hover:bg-surface-container rounded-full cursor-pointer bg-transparent border-none"
           >
             Cancelar
           </button>
-          <button 
-            onClick={() => onSave(formData)} 
+          <button
+            onClick={() => onSave(formData)}
             className="bg-primary text-on-primary font-bold px-6 py-2.5 rounded-full cursor-pointer hover:opacity-90 active:scale-95 transition-all border-none"
           >
             Guardar
