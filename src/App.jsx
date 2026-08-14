@@ -7,6 +7,8 @@ import MunicipiosList from './pages/MunicipiosList'
 import MunicipioDashboard from './pages/MunicipioDashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import UserManagement from './pages/UserManagement'
 import QuestionConfig from './pages/QuestionConfig'
 import AutodiagnosticoLayout from './pages/AutodiagnosticoLayout'
@@ -56,6 +58,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<ProtectedRoute><MunicipiosList /></ProtectedRoute>} />
       <Route path="/admin/usuarios" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/admin/preguntas" element={<ProtectedRoute><QuestionConfig /></ProtectedRoute>} />

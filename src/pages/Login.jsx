@@ -140,7 +140,7 @@ export default function Login() {
               </form>
 
               <div className="mt-8 pt-6 border-t border-outline-variant flex flex-col items-center gap-4">
-                <a className="font-label-md text-label-md text-primary hover:text-primary-container transition-colors text-center block" href="#">¿Olvidaste tu contraseña?</a>
+                <a className="font-label-md text-label-md text-primary hover:text-primary-container transition-colors text-center block cursor-pointer" onClick={() => navigate('/forgot-password')}>¿Olvidaste tu contraseña?</a>
                 <div className="text-center">
                   <span className="font-label-md text-label-md text-on-surface-variant">¿No tienes cuenta?</span>
                   <a className="font-label-md text-label-md text-secondary font-semibold hover:underline ml-1 cursor-pointer" onClick={() => navigate('/register')}>Regístrate</a>
