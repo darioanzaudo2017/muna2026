@@ -14,6 +14,7 @@ import QuestionConfig from './pages/QuestionConfig'
 import AutodiagnosticoLayout from './pages/AutodiagnosticoLayout'
 import PlanDeAccion from './pages/PlanDeAccion'
 import PlanDeAccionResumen from './pages/PlanDeAccionResumen'
+import IdentidadVisual from './pages/IdentidadVisual'
 import { getOrCreateAutodiagnostico } from './lib/supabase'
 
 function ProtectedRoute({ children }) {
@@ -61,6 +62,7 @@ function AppRoutes() {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<ProtectedRoute><MunicipiosList /></ProtectedRoute>} />
+      <Route path="/identidad-visual" element={<ProtectedRoute><IdentidadVisual /></ProtectedRoute>} />
       <Route path="/admin/usuarios" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/admin/preguntas" element={<ProtectedRoute><QuestionConfig /></ProtectedRoute>} />
       <Route path="/municipio/:id" element={<ProtectedRoute><MunicipioDashboard /></ProtectedRoute>} />

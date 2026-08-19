@@ -34,6 +34,13 @@ export default function SlideBar({ isOpen, onClose }) {
         : 'Lista y autodiagnósticos'
     },
     {
+      name: 'Identidad Visual',
+      icon: 'palette',
+      path: '/identidad-visual',
+      adminOnly: false,
+      desc: 'Logos y manual de marca'
+    },
+    {
       name: 'Usuarios',
       icon: 'group',
       path: '/admin/usuarios',
