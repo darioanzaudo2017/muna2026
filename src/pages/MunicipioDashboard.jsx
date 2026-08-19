@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import SlideBar from '../components/SlideBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getOrCreateAutodiagnostico } from '../lib/supabase'
+import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
 import PlanDeAccion from './PlanDeAccion'
 
 // 12 sections template data with default icons and metrics (for Autodiagnóstico tab)
@@ -51,6 +52,7 @@ export default function MunicipioDashboard() {
   const [dynamicSectionProgress, setDynamicSectionProgress] = useState({})
   const [seccionesConPreguntas, setSeccionesConPreguntas] = useState(null)
   const [dashboardLoading, setDashboardLoading] = useState(true)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   useEffect(() => {
     async function loadDashboard() {
@@ -127,6 +129,18 @@ export default function MunicipioDashboard() {
   }, [munId])
 
   const muni = { nombre: muniNombre || '...' }
+
+  const handleDownloadPdf = async () => {
+    if (!idAutodiagnostico) return
+    setDownloadingPdf(true)
+    try {
+      await descargarPdfAutodiagnostico({ idAutodiagnostico, idMunicipio: munId })
+    } catch (err) {
+      console.error('Error generando PDF:', err)
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   const handleMarkCompleteInline = async () => {
     if (!idAutodiagnostico) return
@@ -404,14 +418,27 @@ export default function MunicipioDashboard() {
                 </p>
               </div>
 
-              <button
-                disabled={!idAutodiagnostico}
-                onClick={() => navigate(`/municipio/${id}/autodiagnostico/${idAutodiagnostico}`)}
-                className="bg-primary text-on-primary font-bold px-8 py-3.5 rounded-full flex items-center gap-2 hover:bg-primary-container hover:text-primary transition-all active:scale-95 border-none cursor-pointer shadow-md shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className="material-symbols-outlined">edit_note</span>
-                {currentProgress === 100 ? 'Revisar Respuestas' : (currentProgress > 0 ? 'Continuar Autodiagnóstico' : 'Iniciar Autodiagnóstico')}
-              </button>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  disabled={!idAutodiagnostico || downloadingPdf}
+                  onClick={handleDownloadPdf}
+                  title="Descargar PDF del autodiagnóstico"
+                  className="border border-primary text-primary font-bold px-4 py-3.5 rounded-full flex items-center gap-2 hover:bg-primary hover:text-on-primary transition-all active:scale-95 bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className={`material-symbols-outlined ${downloadingPdf ? 'animate-spin' : ''}`}>
+                    {downloadingPdf ? 'sync' : 'picture_as_pdf'}
+                  </span>
+                  <span className="hidden lg:inline">PDF</span>
+                </button>
+                <button
+                  disabled={!idAutodiagnostico}
+                  onClick={() => navigate(`/municipio/${id}/autodiagnostico/${idAutodiagnostico}`)}
+                  className="bg-primary text-on-primary font-bold px-8 py-3.5 rounded-full flex items-center gap-2 hover:bg-primary-container hover:text-primary transition-all active:scale-95 border-none cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined">edit_note</span>
+                  {currentProgress === 100 ? 'Revisar Respuestas' : (currentProgress > 0 ? 'Continuar Autodiagnóstico' : 'Iniciar Autodiagnóstico')}
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">

@@ -5,12 +5,14 @@ import SaveIndicator from '../components/SaveIndicator'
 import ProgressBar from '../components/ProgressBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
 
 export default function AutodiagnosticoLayout() {
   const { id, idAutodiagnostico } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   useAuth()
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   const [muni, setMuni] = useState({ nombre: '' })
   const [secciones, setSecciones] = useState([])
@@ -271,6 +273,18 @@ export default function AutodiagnosticoLayout() {
     setTimeout(() => navigate(`/municipio/${id}`), 2000)
   }
 
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true)
+    try {
+      await descargarPdfAutodiagnostico({ idAutodiagnostico: Number(idAutodiagnostico), idMunicipio: Number(id) })
+    } catch (err) {
+      console.error('Error generando PDF:', err)
+      showToast("No se pudo generar el PDF. Intentá nuevamente.", "error")
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
+
   // Back button prompt
   const handleBackToDashboard = () => {
     if (saveStatus === 'saving') {
@@ -343,6 +357,15 @@ export default function AutodiagnosticoLayout() {
           <div className="hidden sm:block">
             <SaveIndicator status={saveStatus} />
           </div>
+
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf || initialLoading}
+            title="Descargar PDF del autodiagnóstico"
+            className={`material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${downloadingPdf ? 'animate-spin' : ''}`}
+          >
+            {downloadingPdf ? 'sync' : 'picture_as_pdf'}
+          </button>
 
           {estado === 'completo' ? (
             <span className="bg-[#d1fae5] text-[#065f46] text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full flex items-center gap-xs border border-[#a7f3d0]">
