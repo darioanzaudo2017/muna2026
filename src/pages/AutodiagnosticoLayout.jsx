@@ -37,12 +37,13 @@ export default function AutodiagnosticoLayout() {
       setInitialLoading(true)
 
       // Municipio
-      const { data: muniData } = await supabase
+      const { data: muniData, error: muniError } = await supabase
         .from('municipios')
         .select('id, nombre')
         .eq('id', id)
-        .single()
+        .maybeSingle()
       if (muniData) setMuni(muniData)
+      else if (muniError) console.error('Error cargando municipio:', muniError)
 
       // Secciones y preguntas
       const [{ data: secsData }, { data: pregsData }] = await Promise.all([
@@ -316,26 +317,29 @@ export default function AutodiagnosticoLayout() {
 
       {/* Header Anchor */}
       <header className="fixed top-0 left-0 w-full z-45 flex justify-between items-center px-margin-mobile md:px-margin-desktop h-16 bg-surface shadow-custom-sm border-b border-outline-variant">
-        <div className="flex items-center gap-sm">
-          <button 
+        <div className="flex items-center gap-sm shrink min-w-0">
+          <button
             onClick={handleBackToDashboard}
-            className="material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer"
+            className="material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer shrink-0"
             title="Volver al dashboard"
           >
             arrow_back
           </button>
-          <div className="flex flex-col">
-            <span className="font-headline-md text-[16px] md:text-headline-md font-bold text-primary truncate max-w-[180px] md:max-w-xs">
-              {muni.nombre}
+          <div className="flex flex-col min-w-0">
+            <span 
+              className="text-[16px] md:text-[18px] font-bold text-primary truncate max-w-[180px] sm:max-w-[300px] md:max-w-[450px]"
+              title={muni.nombre}
+            >
+              {muni.nombre || (initialLoading ? 'Cargando municipio...' : `Municipio #${id}`)}
             </span>
-            <span className="text-[10px] text-outline font-semibold leading-none mt-0.5">
+            <span className="text-[10px] md:text-[11px] text-outline font-semibold leading-none mt-0.5 truncate">
               Autodiagnóstico Técnico 2026
             </span>
           </div>
         </div>
 
         {/* Save status & Finish action */}
-        <div className="flex items-center gap-md">
+        <div className="flex items-center gap-md shrink-0">
           <div className="hidden sm:block">
             <SaveIndicator status={saveStatus} />
           </div>

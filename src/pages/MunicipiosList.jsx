@@ -181,13 +181,15 @@ export default function MunicipiosList() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button 
-              onClick={() => setShowAddModal(true)}
-              className="bg-primary text-on-primary px-lg py-sm rounded-xl font-label-md text-label-md flex items-center gap-xs hover:bg-primary-container transition-all active:scale-95 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[20px]">add</span>
-              Nuevo
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="bg-primary text-on-primary px-lg py-sm rounded-xl font-label-md text-label-md flex items-center gap-xs hover:bg-primary-container transition-all active:scale-95 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">add</span>
+                Nuevo
+              </button>
+            )}
           </div>
         </section>
 
@@ -292,20 +294,22 @@ export default function MunicipiosList() {
           ))}
 
           {/* Add New Card */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="border-2 border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-md p-md bg-transparent hover:bg-surface-container-low transition-all duration-300 group h-full min-h-[300px] cursor-pointer"
-          >
-            <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center group-hover:bg-primary-container transition-colors duration-300">
-              <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors duration-300" style={{ fontSize: '32px' }}>
-                add_location_alt
-              </span>
-            </div>
-            <div className="text-center">
-              <p className="font-headline-md text-headline-md text-on-surface">Nuevo Municipio</p>
-              <p className="font-label-md text-label-md text-on-surface-variant">Configurar nueva área local</p>
-            </div>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="border-2 border-dashed border-outline-variant rounded-2xl flex flex-col items-center justify-center gap-md p-md bg-transparent hover:bg-surface-container-low transition-all duration-300 group h-full min-h-[300px] cursor-pointer"
+            >
+              <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center group-hover:bg-primary-container transition-colors duration-300">
+                <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors duration-300" style={{ fontSize: '32px' }}>
+                  add_location_alt
+                </span>
+              </div>
+              <div className="text-center">
+                <p className="font-headline-md text-headline-md text-on-surface">Nuevo Municipio</p>
+                <p className="font-label-md text-label-md text-on-surface-variant">Configurar nueva área local</p>
+              </div>
+            </button>
+          )}
         </div>
       </main>
 
@@ -330,15 +334,17 @@ export default function MunicipiosList() {
       </nav>
 
       {/* Floating Action Button */}
-      <button 
-        onClick={() => setShowAddModal(true)}
-        className="fixed right-md bottom-24 md:bottom-md md:right-md w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-40 cursor-pointer"
-      >
-        <span className="material-symbols-outlined text-[24px]">add</span>
-      </button>
+      {isAdmin && (
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="fixed right-md bottom-24 md:bottom-md md:right-md w-14 h-14 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform z-40 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[24px]">add</span>
+        </button>
+      )}
 
       {/* Add Municipality Modal */}
-      {showAddModal && (
+      {isAdmin && showAddModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
           <div className="bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant w-[95%] max-w-[450px] p-6 space-y-4">
             <h2 className="text-headline-md font-bold text-primary">Agregar Municipio</h2>
