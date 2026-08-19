@@ -591,7 +591,7 @@ export default function MunicipioDashboard() {
 
       {/* Side Drawer (Action Detail) */}
       <div 
-        className={`fixed right-0 top-0 h-full w-full max-w-md bg-white z-[70] shadow-2xl transition-transform duration-300 flex flex-col ${
+        className={`fixed right-0 top-0 h-full w-full max-w-[448px] bg-white z-[70] shadow-2xl transition-transform duration-300 flex flex-col ${
           isDrawerOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

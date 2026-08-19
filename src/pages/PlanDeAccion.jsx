@@ -439,7 +439,7 @@ export default function PlanDeAccion({
                 <span className="material-symbols-outlined text-[64px] text-outline">folder_off</span>
                 <div className="space-y-1">
                   <h3 className="font-headline-md text-headline-md font-bold text-on-surface">No hay líneas temáticas adoptadas</h3>
-                  <p className="font-body-md text-on-surface-variant max-w-md">
+                  <p className="font-body-md text-on-surface-variant max-w-[448px]">
                     Para comenzar a elaborar el Plan de Acción, el municipio debe adoptar al menos una línea temática del catálogo de MUNA.
                   </p>
                 </div>

@@ -261,7 +261,7 @@ export default function UserManagement() {
           </div>
         </header>
         <main className="md:ml-64 pt-24 pb-12 px-6 flex-grow flex flex-col justify-center items-center">
-          <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant text-center max-w-md w-full">
+          <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant text-center max-w-[448px] w-full">
             <span className="material-symbols-outlined text-error-container text-[48px] bg-error-container text-on-error-container p-4 rounded-full mb-4">error</span>
             <h2 className="text-xl font-bold text-on-surface mb-2">Error al cargar datos</h2>
             <p className="text-on-surface-variant mb-6 text-sm">{error}</p>

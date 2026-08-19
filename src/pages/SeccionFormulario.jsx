@@ -275,7 +275,7 @@ export default function SeccionFormulario({
       <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-12 text-center space-y-4">
         <span className="material-symbols-outlined text-[48px] text-outline opacity-60">lock</span>
         <h3 className="font-headline-md text-headline-md text-on-surface-variant">Sección no disponible</h3>
-        <p className="font-body-md text-body-md text-on-surface-variant/80 max-w-md mx-auto">
+        <p className="font-body-md text-body-md text-on-surface-variant/80 max-w-[448px] mx-auto">
           Esta sección no cuenta con preguntas activas en el cuestionario actual.
         </p>
       </div>

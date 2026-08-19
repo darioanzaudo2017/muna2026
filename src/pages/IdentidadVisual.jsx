@@ -391,7 +391,7 @@ export default function IdentidadVisual() {
           </div>
         ) : recursos.length === 0 ? (
           /* Empty State */
-          <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 p-12 text-center max-w-xl mx-auto my-12 shadow-custom-sm">
+          <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 p-12 text-center max-w-[576px] mx-auto my-12 shadow-custom-sm">
             <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4 text-primary">
               <span className="material-symbols-outlined text-[36px]">palette</span>
             </div>
@@ -470,7 +470,7 @@ export default function IdentidadVisual() {
       {/* Admin Upload Modal */}
       {showAddModal && isAdmin && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-[80] flex items-center justify-center p-4">
-          <div className="bg-surface-container-lowest rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-outline-variant/40 space-y-6 animate-scale-in">
+          <div className="bg-surface-container-lowest rounded-2xl max-w-[512px] w-full p-6 shadow-2xl border border-outline-variant/40 space-y-6 animate-scale-in">
             <div className="flex justify-between items-center border-b border-outline-variant/30 pb-4">
               <div className="flex items-center gap-2 text-primary font-bold text-lg">
                 <span className="material-symbols-outlined text-[24px]">cloud_upload</span>

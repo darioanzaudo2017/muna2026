@@ -766,7 +766,7 @@ export default function QuestionConfig() {
               <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 p-xl text-center space-y-sm">
                 <span className="material-symbols-outlined text-[48px] text-outline">quiz</span>
                 <p className="font-headline-md text-headline-md text-on-surface mt-sm">Sin preguntas</p>
-                <p className="font-body-md text-body-md text-on-surface-variant max-w-md mx-auto">
+                <p className="font-body-md text-body-md text-on-surface-variant max-w-[448px] mx-auto">
                   No hay preguntas configuradas en esta sección o no coinciden con los filtros aplicados.
                 </p>
               </div>

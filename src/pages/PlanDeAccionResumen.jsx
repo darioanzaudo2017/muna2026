@@ -8,6 +8,7 @@ export default function PlanDeAccionResumen() {
 
   // States
   const [lines, setLines] = useState([])
+  const [accionesPorLinea, setAccionesPorLinea] = useState({})
   const [municipioNombre, setMunicipioNombre] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -79,6 +80,26 @@ export default function PlanDeAccionResumen() {
 
       if (linesErr) throw linesErr
       setLines(linesData || [])
+
+      // Iniciativas ligadas directamente a la línea (sin pasar por una meta),
+      // que es como las crea/edita el editor de Plan de Acción.
+      const { data: accionesData, error: accErr } = await supabase
+        .from('acciones')
+        .select(`
+          id, nombre_iniciativa, descripcion, tipo, estado, responsable,
+          poblacion_objetivo, resultado_esperado, idlinea_municipio,
+          intervenciones(id, fecha, descripcion, adjunto_url)
+        `)
+        .eq('idmunicipio', id)
+
+      if (accErr) throw accErr
+
+      const porLinea = {}
+      ;(accionesData || []).forEach(a => {
+        if (!porLinea[a.idlinea_municipio]) porLinea[a.idlinea_municipio] = []
+        porLinea[a.idlinea_municipio].push(a)
+      })
+      setAccionesPorLinea(porLinea)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -92,7 +113,7 @@ export default function PlanDeAccionResumen() {
     }
   }, [id])
 
-  const getLineStats = (line) => {
+  const getLineData = (line) => {
     let activeMetas = 0
     let totalInterventions = 0
     const seenActionIds = new Set()
@@ -115,7 +136,103 @@ export default function PlanDeAccionResumen() {
         }
       })
     }
-    return { activeMetas, totalInterventions }
+
+    // Iniciativas ligadas directo a la línea (sin meta) — así es como las
+    // crea el editor de Plan de Acción, no quedan fuera del resumen/PDF.
+    const accionesSinMeta = (accionesPorLinea[line.id] || []).filter(
+      acc => !seenActionIds.has(acc.id)
+    )
+    accionesSinMeta.forEach(acc => {
+      totalInterventions += acc.intervenciones?.length || 0
+    })
+
+    return { activeMetas, totalInterventions, accionesSinMeta }
+  }
+
+  const renderIniciativaCard = (action) => {
+    if (!action) return null
+    const isExpanded = expandedActions.has(action.id)
+    return (
+      <div key={action.id} className="bg-surface-container-low/30 p-4 rounded-xl border border-outline-variant/20">
+
+        {/* Initiative header badges and toggle */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${
+              action.type === 'existente'
+                ? 'bg-secondary-container text-on-secondary-container'
+                : action.type === 'planificada'
+                ? 'bg-primary/10 text-primary'
+                : 'bg-surface-container-high text-on-surface-variant'
+            }`}>
+              {action.type || 'sin tipo'}
+            </span>
+            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase bg-surface-container-high text-on-surface-variant">
+              {action.estado || 'sin estado'}
+            </span>
+          </div>
+
+          <button
+            onClick={() => toggleAction(action.id)}
+            className="no-print inline-flex items-center gap-0.5 text-xs text-primary font-bold hover:underline bg-transparent border-none cursor-pointer select-none"
+          >
+            <span>{isExpanded ? 'Ocultar' : 'Ver'} Intervenciones</span>
+            <span className="material-symbols-outlined text-[16px]">
+              {isExpanded ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+        </div>
+
+        {/* Initiative details */}
+        <p className="font-bold text-on-surface text-sm leading-snug">{action.nombre_iniciativa}</p>
+        {action.descripcion && (
+          <p className="text-xs text-on-surface-variant mt-1 leading-normal">{action.descripcion}</p>
+        )}
+
+        {action.responsable && (
+          <div className="flex items-center gap-1 text-xs text-on-surface-variant mt-2 font-medium">
+            <span className="material-symbols-outlined text-[16px]">person</span>
+            <span>Responsable: {action.responsable}</span>
+          </div>
+        )}
+
+        {/* Interventions Sublist */}
+        <div className={`mt-3 space-y-2 interventions-list ${isExpanded ? 'block' : 'hidden print:block'}`}>
+          <h5 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/80">Registros de Intervención</h5>
+          {action.intervenciones && action.intervenciones.length > 0 ? (
+            action.intervenciones.map(inter => (
+              <div
+                key={inter.id}
+                className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 bg-surface-container-lowest/60 p-2.5 rounded-lg border border-outline-variant/10"
+              >
+                <div className="flex-1">
+                  <span className="text-xs font-bold text-on-surface mr-2">
+                    {formatDate(inter.fecha)}
+                  </span>
+                  <span className="text-xs text-on-surface-variant">
+                    {inter.descripcion}
+                  </span>
+                </div>
+                {inter.adjunto_url && (
+                  <a
+                    href={inter.adjunto_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-0.5 font-bold text-xs self-start sm:self-center"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">attach_file</span>
+                    <span>Adjunto</span>
+                  </a>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="text-xs italic text-on-surface-variant/70">Sin registros de intervención</p>
+          )}
+        </div>
+
+      </div>
+    )
   }
 
   const renderProgressBar = (meta) => {
@@ -175,7 +292,7 @@ export default function PlanDeAccionResumen() {
   if (error) {
     return (
       <div className="bg-surface-container-low text-on-surface min-h-screen flex flex-col justify-center items-center p-6">
-        <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant text-center max-w-md w-full">
+        <div className="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant text-center max-w-[448px] w-full">
           <span className="material-symbols-outlined text-error text-[48px] bg-error-container text-on-error-container p-4 rounded-full mb-4">error</span>
           <h2 className="text-xl font-bold text-on-surface mb-2">Error al cargar datos</h2>
           <p className="text-on-surface-variant mb-6 text-sm">{error}</p>
@@ -248,7 +365,7 @@ export default function PlanDeAccionResumen() {
           </div>
         ) : (
           lines.map((line, index) => {
-            const { activeMetas, totalInterventions } = getLineStats(line)
+            const { activeMetas, totalInterventions, accionesSinMeta } = getLineData(line)
             const accent = colors[index % colors.length]
             return (
               <div 
@@ -316,92 +433,7 @@ export default function PlanDeAccionResumen() {
                           <div className="mt-4 pl-4 border-l-2 border-outline-variant/30 space-y-4">
                             <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80">Iniciativas Vinculadas</h4>
                             {meta.metas_acciones && meta.metas_acciones.length > 0 ? (
-                              meta.metas_acciones.map(ma => {
-                                const action = ma.acciones
-                                if (!action) return null
-                                const isExpanded = expandedActions.has(action.id)
-                                return (
-                                  <div key={action.id} className="bg-surface-container-low/30 p-4 rounded-xl border border-outline-variant/20">
-                                    
-                                    {/* Initiative header badges and toggle */}
-                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                                      <div className="flex flex-wrap items-center gap-1.5">
-                                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${
-                                          action.type === 'existente'
-                                            ? 'bg-secondary-container text-on-secondary-container'
-                                            : action.type === 'planificada'
-                                            ? 'bg-primary/10 text-primary'
-                                            : 'bg-surface-container-high text-on-surface-variant'
-                                        }`}>
-                                          {action.type || 'sin tipo'}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase bg-surface-container-high text-on-surface-variant">
-                                          {action.estado || 'sin estado'}
-                                        </span>
-                                      </div>
-                                      
-                                      <button 
-                                        onClick={() => toggleAction(action.id)} 
-                                        className="no-print inline-flex items-center gap-0.5 text-xs text-primary font-bold hover:underline bg-transparent border-none cursor-pointer select-none"
-                                      >
-                                        <span>{isExpanded ? 'Ocultar' : 'Ver'} Intervenciones</span>
-                                        <span className="material-symbols-outlined text-[16px]">
-                                          {isExpanded ? 'expand_less' : 'expand_more'}
-                                        </span>
-                                      </button>
-                                    </div>
-
-                                    {/* Initiative details */}
-                                    <p className="font-bold text-on-surface text-sm leading-snug">{action.nombre_iniciativa}</p>
-                                    {action.descripcion && (
-                                      <p className="text-xs text-on-surface-variant mt-1 leading-normal">{action.descripcion}</p>
-                                    )}
-
-                                    {action.responsable && (
-                                      <div className="flex items-center gap-1 text-xs text-on-surface-variant mt-2 font-medium">
-                                        <span className="material-symbols-outlined text-[16px]">person</span>
-                                        <span>Responsable: {action.responsable}</span>
-                                      </div>
-                                    )}
-
-                                    {/* Interventions Sublist */}
-                                    <div className={`mt-3 space-y-2 interventions-list ${isExpanded ? 'block' : 'hidden print:block'}`}>
-                                      <h5 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/80">Registros de Intervención</h5>
-                                      {action.intervenciones && action.intervenciones.length > 0 ? (
-                                        action.intervenciones.map(inter => (
-                                          <div 
-                                            key={inter.id} 
-                                            className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 bg-surface-container-lowest/60 p-2.5 rounded-lg border border-outline-variant/10"
-                                          >
-                                            <div className="flex-1">
-                                              <span className="text-xs font-bold text-on-surface mr-2">
-                                                {formatDate(inter.fecha)}
-                                              </span>
-                                              <span className="text-xs text-on-surface-variant">
-                                                {inter.descripcion}
-                                              </span>
-                                            </div>
-                                            {inter.adjunto_url && (
-                                              <a 
-                                                href={inter.adjunto_url} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer"
-                                                className="text-primary hover:underline inline-flex items-center gap-0.5 font-bold text-xs self-start sm:self-center"
-                                              >
-                                                <span className="material-symbols-outlined text-[16px]">attach_file</span>
-                                                <span>Adjunto</span>
-                                              </a>
-                                            )}
-                                          </div>
-                                        ))
-                                      ) : (
-                                        <p className="text-xs italic text-on-surface-variant/70">Sin registros de intervención</p>
-                                      )}
-                                    </div>
-
-                                  </div>
-                                )
-                              })
+                              meta.metas_acciones.map(ma => renderIniciativaCard(ma.acciones))
                             ) : (
                               <span className="inline-block text-xs italic text-on-surface-variant bg-surface-container-high/40 px-3 py-1 rounded-lg">
                                 Sin iniciativas vinculadas
@@ -416,6 +448,18 @@ export default function PlanDeAccionResumen() {
                     <span className="inline-block text-xs italic text-on-surface-variant bg-surface-container-high/40 px-3 py-2 rounded-lg">
                       Sin metas definidas
                     </span>
+                  )}
+
+                  {/* Iniciativas ligadas directo a la línea, sin meta asociada */}
+                  {accionesSinMeta.length > 0 && (
+                    <div className="border-t border-outline-variant/20 pt-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant/80 mb-3">
+                        Otras Iniciativas
+                      </h4>
+                      <div className="space-y-4">
+                        {accionesSinMeta.map(action => renderIniciativaCard(action))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
