@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-export function useSecciones() {
+export function useSecciones(idCohorte = null) {
   const [secciones, setSecciones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -12,7 +12,7 @@ export function useSecciones() {
     async function fetchSecciones() {
       try {
         setLoading(true)
-        const { data, error: dbError } = await supabase
+        let query = supabase
           .from('secciones')
           .select(`
             id,
@@ -37,6 +37,12 @@ export function useSecciones() {
             )
           `)
           .order('orden')
+
+        if (idCohorte) {
+          query = query.eq('id_cohorte', idCohorte)
+        }
+
+        const { data, error: dbError } = await query
 
         if (dbError) throw dbError
 

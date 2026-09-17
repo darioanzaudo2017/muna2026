@@ -53,6 +53,13 @@ export default function SlideBar({ isOpen, onClose }) {
       path: '/admin/preguntas',
       adminOnly: true,
       desc: 'Configurar cuestionario'
+    },
+    {
+      name: 'Líneas Temáticas',
+      icon: 'category',
+      path: '/admin/lineas-tematicas',
+      adminOnly: true,
+      desc: 'Catálogo de líneas'
     }
   ]
 

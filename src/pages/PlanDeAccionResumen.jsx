@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function PlanDeAccionResumen() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // States
   const [lines, setLines] = useState([])
@@ -13,6 +14,8 @@ export default function PlanDeAccionResumen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedActions, setExpandedActions] = useState(new Set())
+
+  const stateCohorteId = location.state?.idCohorte
 
   const toggleAction = (actionId) => {
     setExpandedActions(prev => {
@@ -50,26 +53,28 @@ export default function PlanDeAccionResumen() {
     try {
       const { data: muniData, error: muniErr } = await supabase
         .from('municipios')
-        .select('nombre')
+        .select('nombre, id_cohorte')
         .eq('id', id)
         .maybeSingle()
 
       if (muniErr) throw muniErr
       setMunicipioNombre(muniData?.nombre || 'Municipio')
 
-      const { data: linesData, error: linesErr } = await supabase
+      const targetCohorteId = stateCohorteId ?? muniData?.id_cohorte
+
+      let linesQuery = supabase
         .from('lineas_municipio')
         .select(`
-          id, objetivo_general,
+          id, objetivo_general, id_cohorte,
           lista_lineas_tematicas(id, nombre),
           metas_linea(
             id, meta, indicador, indicador_base, indicador_objetivo, indicador_valor,
-            estado, fecha_inicio, fecha_final,
+            estado, fecha_inicio, fecha_final, id_cohorte,
             metas_acciones(
               id_accion,
               acciones(
                 id, nombre_iniciativa, descripcion, tipo, estado, responsable,
-                poblacion_objetivo, resultado_esperado,
+                poblacion_objetivo, resultado_esperado, id_cohorte,
                 intervenciones(id, fecha, descripcion, adjunto_url)
               )
             )
@@ -78,19 +83,31 @@ export default function PlanDeAccionResumen() {
         .eq('idmunicipio', id)
         .order('id')
 
+      if (targetCohorteId) {
+        linesQuery = linesQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: linesData, error: linesErr } = await linesQuery
+
       if (linesErr) throw linesErr
       setLines(linesData || [])
 
       // Iniciativas ligadas directamente a la línea (sin pasar por una meta),
       // que es como las crea/edita el editor de Plan de Acción.
-      const { data: accionesData, error: accErr } = await supabase
+      let accionesQuery = supabase
         .from('acciones')
         .select(`
           id, nombre_iniciativa, descripcion, tipo, estado, responsable,
-          poblacion_objetivo, resultado_esperado, idlinea_municipio,
+          poblacion_objetivo, resultado_esperado, idlinea_municipio, id_cohorte,
           intervenciones(id, fecha, descripcion, adjunto_url)
         `)
         .eq('idmunicipio', id)
+
+      if (targetCohorteId) {
+        accionesQuery = accionesQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: accionesData, error: accErr } = await accionesQuery
 
       if (accErr) throw accErr
 
@@ -111,7 +128,7 @@ export default function PlanDeAccionResumen() {
     if (id) {
       loadData()
     }
-  }, [id])
+  }, [id, stateCohorteId])
 
   const getLineData = (line) => {
     let activeMetas = 0

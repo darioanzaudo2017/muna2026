@@ -5,25 +5,12 @@ import SlideBar from '../components/SlideBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
-const SECCIONES_LIST = [
-  { order: 1, name: 'Datos generales' },
-  { order: 2, name: 'Datos socioeconómicos' },
-  { order: 3, name: 'Primera infancia' },
-  { order: 4, name: 'Inclusión educativa' },
-  { order: 5, name: 'Salud sexual y reproductiva' },
-  { order: 6, name: 'Entornos saludables' },
-  { order: 7, name: 'Entornos libres de violencia' },
-  { order: 8, name: 'Discapacidad' },
-  { order: 9, name: 'Medio ambiente' },
-  { order: 10, name: 'Participación' },
-  { order: 11, name: 'Articulación sector privado' },
-  { order: 12, name: 'Protección digital' },
-]
-
+// Colores de estado tipo semáforo — independientes de la paleta de marca
+// (primary/secondary/tertiary), para que no se pisen si la marca cambia.
 function calcEstado(progreso) {
-  if (progreso === 100) return { label: 'Completado', badgeClass: 'bg-[#d1fae5] text-[#065f46]', borderClass: 'border-l-4 border-[#10b981]', btnText: 'Consultar Resultados' }
-  if (progreso > 0)    return { label: 'En Proceso',  badgeClass: 'bg-secondary-container text-on-secondary-container', borderClass: 'border-l-4 border-primary', btnText: 'Ver Dashboard' }
-  return                      { label: 'Pendiente',   badgeClass: 'bg-tertiary-fixed text-on-tertiary-fixed', borderClass: 'border-l-4 border-tertiary', btnText: 'Comenzar Carga' }
+  if (progreso === 100) return { label: 'Completado', badgeClass: 'bg-[#dcfce7] text-[#15803d]', borderClass: 'border-l-4 border-[#22c55e]', btnText: 'Consultar Resultados' }
+  if (progreso > 0)    return { label: 'En Proceso',  badgeClass: 'bg-[#ffedd5] text-[#c2410c]', borderClass: 'border-l-4 border-[#f97316]', btnText: 'Ver Dashboard' }
+  return                      { label: 'Pendiente',   badgeClass: 'bg-[#fee2e2] text-[#b91c1c]', borderClass: 'border-l-4 border-[#ef4444]', btnText: 'Comenzar Carga' }
 }
 
 export default function MunicipiosList() {
@@ -33,6 +20,8 @@ export default function MunicipiosList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
   const [newMuniName, setNewMuniName] = useState('')
+  const [newMuniCohorteId, setNewMuniCohorteId] = useState('')
+  const [cohortes, setCohortes] = useState([])
   const [municipiosDisponibles, setMunicipiosDisponibles] = useState([])
   const [municipios, setMunicipios] = useState([])
   const [loading, setLoading] = useState(true)
@@ -43,20 +32,32 @@ export default function MunicipiosList() {
 
   async function fetchMunicipios() {
     setLoading(true)
-    const { data: munis } = await supabase
-      .from('municipios')
-      .select('id, nombre, ultima_actualizacion')
-      .order('nombre')
+    const [{ data: munis }, { data: cohortesData }, { data: seccionesData }] = await Promise.all([
+      supabase.from('municipios').select('id, nombre, ultima_actualizacion, id_cohorte').order('nombre'),
+      supabase.from('cohortes').select('id, nombre, activa, orden').order('orden'),
+      supabase.from('secciones').select('id, nombre, orden, id_cohorte').order('orden'),
+    ])
+
+    if (cohortesData && cohortesData.length > 0) {
+      setCohortes(cohortesData)
+      const defaultCohorte = cohortesData.find(c => c.activa) || cohortesData[0]
+      setNewMuniCohorteId(prev => prev || defaultCohorte?.id?.toString() || '')
+    }
 
     if (!munis) { setLoading(false); return }
+
+    const allSecciones = seccionesData ?? []
 
     const enriched = await Promise.all(munis.map(async (m) => {
       const { data: autodiags } = await supabase
         .from('autodiagnosticos')
-        .select('id')
+        .select('id, id_cohorte')
         .eq('idmunicipio', m.id)
 
       const autodiagIds = (autodiags ?? []).map(a => a.id)
+      const cohorteId = autodiags?.[0]?.id_cohorte ?? m.id_cohorte ?? cohortesData?.[0]?.id
+
+      const muniSecciones = allSecciones.filter(s => s.id_cohorte === cohorteId)
 
       const { data: seccionesConRespuestas } = autodiagIds.length > 0
         ? await supabase
@@ -66,20 +67,23 @@ export default function MunicipiosList() {
         : { data: [] }
 
       const seccionesIds = [...new Set((seccionesConRespuestas ?? []).map(r => r.preguntas?.id_seccion).filter(Boolean))]
-      const totalSecciones = 12
-      const completadas = seccionesIds.length
-      const progreso = Math.round((completadas / totalSecciones) * 100)
+      const totalSecciones = muniSecciones.length
+      const completadas = seccionesIds.filter(sid => muniSecciones.some(s => s.id === sid)).length
+      const progreso = totalSecciones > 0 ? Math.round((completadas / totalSecciones) * 100) : 0
 
-      const secciones = SECCIONES_LIST.map((_, i) => {
-        const secId = i + 1
-        return seccionesIds.includes(secId) ? 'completa' : 'sin_empezar'
-      })
+      const secciones = muniSecciones.map((sec) => ({
+        id: sec.id,
+        orden: sec.orden,
+        name: sec.nombre,
+        icon: sec.icon,
+        status: seccionesIds.includes(sec.id) ? 'completa' : 'sin_empezar'
+      }))
 
       const lastUpdate = m.ultima_actualizacion
         ? new Date(m.ultima_actualizacion).toLocaleDateString('es-AR')
         : 'Sin actividad'
 
-      return { id: m.id, nombre: m.nombre, lastUpdate, progreso, secciones, ...calcEstado(progreso) }
+      return { id: m.id, nombre: m.nombre, lastUpdate, progreso, secciones, totalSecciones, ...calcEstado(progreso) }
     }))
 
     setMunicipios(enriched)
@@ -98,7 +102,7 @@ export default function MunicipiosList() {
 
   const handleAddMunicipio = async (e) => {
     e.preventDefault()
-    if (!newMuniName.trim()) return
+    if (!newMuniName.trim() || !newMuniCohorteId) return
     const nombre = newMuniName.trim()
     // Si no está en el catálogo, agregarlo primero para respetar la FK
     const enCatalogo = municipiosDisponibles.includes(nombre)
@@ -106,7 +110,10 @@ export default function MunicipiosList() {
       const { error: errorLista } = await supabase.from('lista_municipios').insert({ nombre })
       if (errorLista) return
     }
-    const { error } = await supabase.from('municipios').insert({ nombre })
+    const { error } = await supabase.from('municipios').insert({
+      nombre,
+      id_cohorte: Number(newMuniCohorteId)
+    })
     if (!error) {
       setNewMuniName('')
       setShowAddModal(false)
@@ -193,6 +200,56 @@ export default function MunicipiosList() {
           </div>
         </section>
 
+        {/* Barra Resumen por Estado */}
+        {!loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-md mb-lg">
+            <div className="bg-[#fee2e2] border border-[#ef4444]/30 rounded-2xl p-4 flex items-center justify-between shadow-custom-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center text-[#b91c1c]">
+                  <span className="material-symbols-outlined text-[24px]">pending</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-[#b91c1c] uppercase tracking-wider block">Pendientes</span>
+                  <span className="text-xs text-[#b91c1c]/80 font-medium">0% de avance</span>
+                </div>
+              </div>
+              <span className="text-2xl font-extrabold text-[#b91c1c]">
+                {municipios.filter(m => m.progreso === 0).length}
+              </span>
+            </div>
+
+            <div className="bg-[#ffedd5] border border-[#f97316]/30 rounded-2xl p-4 flex items-center justify-between shadow-custom-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center text-[#c2410c]">
+                  <span className="material-symbols-outlined text-[24px]">timelapse</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-[#c2410c] uppercase tracking-wider block">En Proceso</span>
+                  <span className="text-xs text-[#c2410c]/80 font-medium">1% - 99% de avance</span>
+                </div>
+              </div>
+              <span className="text-2xl font-extrabold text-[#c2410c]">
+                {municipios.filter(m => m.progreso > 0 && m.progreso < 100).length}
+              </span>
+            </div>
+
+            <div className="bg-[#dcfce7] border border-[#22c55e]/30 rounded-2xl p-4 flex items-center justify-between shadow-custom-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/80 flex items-center justify-center text-[#15803d]">
+                  <span className="material-symbols-outlined text-[24px]">check_circle</span>
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-[#15803d] uppercase tracking-wider block">Completados</span>
+                  <span className="text-xs text-[#15803d]/80 font-medium">100% de avance</span>
+                </div>
+              </div>
+              <span className="text-2xl font-extrabold text-[#15803d]">
+                {municipios.filter(m => m.progreso === 100).length}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Bento Grid of Municipalities */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
           {loading && (
@@ -225,31 +282,30 @@ export default function MunicipiosList() {
                   <div className="flex justify-between items-center mb-xs">
                     <span className="font-label-md text-label-md text-on-surface">Progreso General</span>
                     <span className={`font-label-md text-label-md font-bold ${
-                      muni.progreso === 100 ? 'text-[#059669]' : muni.progreso > 20 ? 'text-primary' : 'text-tertiary'
+                      muni.progreso === 100 ? 'text-[#15803d]' : muni.progreso > 0 ? 'text-[#c2410c]' : 'text-[#b91c1c]'
                     }`}>
                       {muni.progreso}%
                     </span>
                   </div>
-                  <ProgressBar pct={muni.progreso} color={muni.progreso === 100 ? 'bg-[#10b981]' : muni.progreso === 15 ? 'bg-tertiary' : 'bg-primary'} />
+                  <ProgressBar pct={muni.progreso} color={muni.progreso === 100 ? 'bg-[#22c55e]' : muni.progreso > 0 ? 'bg-[#f97316]' : 'bg-[#ef4444]'} />
                 </div>
 
-                {/* 12 Sections Grid */}
+                {/* Real Sections Grid */}
                 <div className="mb-lg">
                   <p className="font-label-sm text-label-sm text-outline mb-sm uppercase tracking-wider">
-                    Módulos de Diagnóstico (12)
+                    Módulos de Diagnóstico ({muni.secciones.length})
                   </p>
                   <div className="grid grid-cols-6 gap-xs bg-surface-container-low p-2 rounded-xl">
-                    {muni.secciones.map((status, index) => {
-                      const sec = SECCIONES_LIST[index]
-                      let iconName = 'circle'
+                    {muni.secciones.map((sec, index) => {
+                      let iconName = sec.icon || 'circle'
                       let iconColor = 'text-outline-variant'
                       let isFilled = false
 
-                      if (status === 'completa') {
+                      if (sec.status === 'completa') {
                         iconName = 'check_circle'
                         iconColor = 'text-[#10b981]'
                         isFilled = true
-                      } else if (status === 'iniciada') {
+                      } else if (sec.status === 'iniciada') {
                         iconName = 'pending'
                         iconColor = 'text-amber-500'
                         isFilled = true
@@ -257,10 +313,10 @@ export default function MunicipiosList() {
 
                       return (
                         <div
-                          key={index}
+                          key={sec.id || index}
                           className="flex flex-col items-center justify-center p-1 relative group/tooltip"
-                          title={`${index + 1}. ${sec.name}: ${
-                            status === 'completa' ? 'Completa' : status === 'iniciada' ? 'En proceso' : 'Sin empezar'
+                          title={`${sec.orden}. ${sec.name}: ${
+                            sec.status === 'completa' ? 'Completa' : sec.status === 'iniciada' ? 'En proceso' : 'Sin empezar'
                           }`}
                         >
                           <span 
@@ -272,7 +328,7 @@ export default function MunicipiosList() {
                           
                           {/* Custom Tooltip */}
                           <div className="absolute bottom-full mb-2 hidden group-hover/tooltip:block bg-inverse-surface text-inverse-on-surface text-[10px] rounded px-2 py-1 whitespace-nowrap z-50 pointer-events-none shadow-md">
-                            {index + 1}. {sec.name}
+                            {sec.orden}. {sec.name}
                           </div>
                         </div>
                       )
@@ -367,6 +423,24 @@ export default function MunicipiosList() {
                     <option key={nombre} value={nombre} />
                   ))}
                 </datalist>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-label-md text-on-surface font-semibold">
+                  Cohorte
+                </label>
+                <select
+                  required
+                  value={newMuniCohorteId}
+                  onChange={(e) => setNewMuniCohorteId(e.target.value)}
+                  className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm cursor-pointer"
+                >
+                  <option value="" disabled>Seleccionar cohorte...</option>
+                  {cohortes.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} {!c.activa ? '(Inactiva)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button

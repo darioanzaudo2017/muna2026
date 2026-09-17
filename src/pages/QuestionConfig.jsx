@@ -15,6 +15,8 @@ export default function QuestionConfig() {
   const [usingMockData, setUsingMockData] = useState(false)
 
   // DB Data States
+  const [cohortes, setCohortes] = useState([])
+  const [selectedCohorteId, setSelectedCohorteId] = useState(null)
   const [secciones, setSecciones] = useState([])
   const [preguntas, setPreguntas] = useState([])
   const [selectedSeccionId, setSelectedSeccionId] = useState(null)
@@ -23,6 +25,11 @@ export default function QuestionConfig() {
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
   const [showInactive, setShowInactive] = useState(true)
+
+  // Clone Modal control
+  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false)
+  const [cloneForm, setCloneForm] = useState({ nombre: '', descripcion: '' })
+  const [cloning, setCloning] = useState(false)
 
   // Modal control
   const [isSeccionModalOpen, setIsSeccionModalOpen] = useState(false)
@@ -43,6 +50,10 @@ export default function QuestionConfig() {
   // Dynamic options when creating/editing question
   const [tempOptions, setTempOptions] = useState([]) // array of { id, etiqueta, valor, orden }
 
+  // Table question config states
+  const [tableMode, setTableMode] = useState('fijo') // 'fijo' | 'dinamico' | 'grupos'
+  const [tableColumns, setTableColumns] = useState([]) // array of { id, key, label, tipo, opciones }
+
   // Expanded questions inline options state
   const [expandedPreguntas, setExpandedPreguntas] = useState({}) // { [preguntaId]: boolean }
 
@@ -56,12 +67,36 @@ export default function QuestionConfig() {
     setTimeout(() => setNotification(null), 4000)
   }
 
+  const handleAddTableColumn = () => {
+    setTableColumns(prev => [
+      ...prev,
+      { id: Date.now(), key: '', label: '', tipo: 'texto', opciones: [] }
+    ])
+  }
+
+  const handleUpdateTableColumn = (colId, field, value) => {
+    setTableColumns(prev => prev.map(c => {
+      if (c.id === colId) {
+        const updated = { ...c, [field]: value }
+        if (field === 'label' && (!c.key || c.key === c.label.toLowerCase().trim().replace(/[^a-z0-9]/g, '_'))) {
+          updated.key = value.toLowerCase().trim().replace(/[^a-z0-9]/g, '_')
+        }
+        return updated
+      }
+      return c
+    }))
+  }
+
+  const handleRemoveTableColumn = (colId) => {
+    setTableColumns(prev => prev.filter(c => c.id !== colId))
+  }
+
   // Mock Data
   const MOCK_SECCIONES = [
-    { id: 1, nombre: 'Datos generales', orden: 1 },
-    { id: 2, nombre: 'Datos socioeconómicos', orden: 2 },
-    { id: 3, nombre: 'Primera infancia', orden: 3 },
-    { id: 4, nombre: 'Inclusión educativa', orden: 4 }
+    { id: 1, nombre: 'Datos generales', orden: 1, id_cohorte: 1 },
+    { id: 2, nombre: 'Datos socioeconómicos', orden: 2, id_cohorte: 1 },
+    { id: 3, nombre: 'Primera infancia', orden: 3, id_cohorte: 1 },
+    { id: 4, nombre: 'Inclusión educativa', orden: 4, id_cohorte: 1 }
   ]
 
   const MOCK_PREGUNTAS = [
@@ -136,26 +171,64 @@ export default function QuestionConfig() {
     numero: { label: 'Número', class: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300' },
     boolean: { label: 'Sí/No', class: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300' },
     opcion: { label: 'Opción Única', class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' },
-    array: { label: 'Opción Múltiple', class: 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' }
+    array: { label: 'Opción Múltiple', class: 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300' },
+    tabla: { label: 'Tabla', class: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300' }
   }
 
-  // Load everything
-  const loadData = async (targetSeccionId = null) => {
+  // Load cohortes and initial data
+  const loadInitialData = async () => {
     setLoading(true)
     setError(null)
     try {
-      // Fetch secciones ordered by orden
+      const { data: cohData, error: cohErr } = await supabase
+        .from('cohortes')
+        .select('*')
+        .order('orden', { ascending: true })
+
+      if (cohErr) throw cohErr
+
+      const list = cohData || []
+      setCohortes(list)
+
+      const activeCoh = list.find(c => c.activa) || list[0]
+      const cohId = activeCoh?.id ?? null
+      setSelectedCohorteId(cohId)
+
+      if (cohId) {
+        await loadData(cohId)
+      } else {
+        setLoading(false)
+      }
+    } catch (err) {
+      console.warn("Supabase cohort fetch failed, loading fallback local config:", err.message)
+      setCohortes([{ id: 1, nombre: 'Cohorte 2025', activa: true, orden: 1 }])
+      setSelectedCohorteId(1)
+      setSecciones(MOCK_SECCIONES)
+      setPreguntas(MOCK_PREGUNTAS)
+      setSelectedSeccionId(MOCK_SECCIONES[0].id)
+      setUsingMockData(true)
+      setLoading(false)
+    }
+  }
+
+  // Load secciones and preguntas for a specific cohorte
+  const loadData = async (cohorteId = selectedCohorteId, targetSeccionId = null) => {
+    if (!cohorteId) return
+    setLoading(true)
+    setError(null)
+    try {
       const { data: secData, error: secErr } = await supabase
         .from('secciones')
         .select('*')
+        .eq('id_cohorte', cohorteId)
         .order('orden')
 
       if (secErr) throw secErr
 
-      // Fetch preguntas ordered by orden with their options
       const { data: pregData, error: pregErr } = await supabase
         .from('preguntas')
         .select('*, opciones_pregunta(*)')
+        .eq('id_cohorte', cohorteId)
         .order('orden')
 
       if (pregErr) throw pregErr
@@ -163,9 +236,12 @@ export default function QuestionConfig() {
       setSecciones(secData || [])
       setPreguntas(pregData || [])
 
-      // Set default selected section if none selected
-      if (secData && secData.length > 0) {
-        setSelectedSeccionId(prev => targetSeccionId || prev || secData[0].id)
+      if (targetSeccionId) {
+        setSelectedSeccionId(targetSeccionId)
+      } else if (secData && secData.length > 0) {
+        setSelectedSeccionId(prev => (secData.some(s => s.id === prev) ? prev : secData[0].id))
+      } else {
+        setSelectedSeccionId(null)
       }
       setUsingMockData(false)
     } catch (err) {
@@ -179,13 +255,14 @@ export default function QuestionConfig() {
     }
   }
 
-  // Reload specific section only
+  // Reload specific section questions only
   const reloadSection = async (seccionId) => {
-    if (usingMockData) return
+    if (usingMockData || !selectedCohorteId) return
     try {
       const { data: pregData, error: pregErr } = await supabase
         .from('preguntas')
         .select('*, opciones_pregunta(*)')
+        .eq('id_cohorte', selectedCohorteId)
         .order('orden')
       
       if (pregErr) throw pregErr
@@ -199,9 +276,129 @@ export default function QuestionConfig() {
 
   useEffect(() => {
     if (!authLoading && isAdmin) {
-      loadData()
+      loadInitialData()
     }
   }, [authLoading, isAdmin])
+
+  // --- CLONAR CUESTIONARIO A COHORTE NUEVA ---
+  const handleCloneCohorte = async (e) => {
+    e.preventDefault()
+    if (!cloneForm.nombre.trim() || !selectedCohorteId) return
+    setCloning(true)
+    try {
+      const nextOrden = cohortes.length > 0 ? Math.max(...cohortes.map(c => c.orden || 0)) + 1 : 1
+      
+      // 1. Crear nueva cohorte
+      const { data: newCohorte, error: cohorteErr } = await supabase
+        .from('cohortes')
+        .insert({
+          nombre: cloneForm.nombre.trim(),
+          descripcion: cloneForm.descripcion?.trim() || null,
+          activa: true,
+          orden: nextOrden
+        })
+        .select()
+        .maybeSingle()
+
+      if (cohorteErr) throw cohorteErr
+      if (!newCohorte) throw new Error('No se pudo crear la nueva cohorte.')
+
+      // 2. Traer secciones de la cohorte origen
+      const { data: srcSecciones, error: srcSecErr } = await supabase
+        .from('secciones')
+        .select('*')
+        .eq('id_cohorte', selectedCohorteId)
+        .order('orden')
+
+      if (srcSecErr) throw srcSecErr
+
+      // 3. Traer preguntas con opciones de la cohorte origen
+      const { data: srcPreguntas, error: srcPregErr } = await supabase
+        .from('preguntas')
+        .select('*, opciones_pregunta(*)')
+        .eq('id_cohorte', selectedCohorteId)
+        .order('orden')
+
+      if (srcPregErr) throw srcPregErr
+
+      // 4. Clonar secciones y guardar mapeo de IDs viejos -> nuevos
+      const seccionIdMap = {}
+      for (const sec of (srcSecciones || [])) {
+        const { data: newSec, error: newSecErr } = await supabase
+          .from('secciones')
+          .insert({
+            nombre: sec.nombre,
+            orden: sec.orden,
+            id_cohorte: newCohorte.id
+          })
+          .select()
+          .maybeSingle()
+
+        if (newSecErr) throw newSecErr
+        if (newSec) {
+          seccionIdMap[sec.id] = newSec.id
+        }
+      }
+
+      // 5. Clonar preguntas y sus opciones
+      for (const preg of (srcPreguntas || [])) {
+        const mappedSecId = seccionIdMap[preg.id_seccion]
+        if (!mappedSecId) continue
+
+        const { data: newPreg, error: newPregErr } = await supabase
+          .from('preguntas')
+          .insert({
+            id_seccion: mappedSecId,
+            orden: preg.orden,
+            codigo: preg.codigo,
+            texto: preg.texto,
+            tipo: preg.tipo,
+            requerida: preg.requerida,
+            activa: preg.activa,
+            config: preg.config,
+            id_cohorte: newCohorte.id
+          })
+          .select()
+          .maybeSingle()
+
+        if (newPregErr) throw newPregErr
+
+        const opciones = preg.opciones_pregunta || []
+        if (opciones.length > 0 && newPreg) {
+          const optsPayload = opciones.map((opt, i) => ({
+            id_pregunta: newPreg.id,
+            etiqueta: opt.etiqueta,
+            valor: opt.valor,
+            orden: opt.orden || (i + 1)
+          }))
+          const { error: optErr } = await supabase
+            .from('opciones_pregunta')
+            .insert(optsPayload)
+
+          if (optErr) throw optErr
+        }
+      }
+
+      showNotification(`¡Cuestionario clonado exitosamente a "${newCohorte.nombre}"!`)
+      setIsCloneModalOpen(false)
+      setCloneForm({ nombre: '', descripcion: '' })
+
+      // Actualizar lista de cohortes y seleccionar la nueva
+      const { data: updatedCohortes } = await supabase
+        .from('cohortes')
+        .select('*')
+        .order('orden', { ascending: true })
+
+      setCohortes(updatedCohortes || [])
+      setSelectedCohorteId(newCohorte.id)
+      await loadData(newCohorte.id)
+    } catch (err) {
+      console.error("Error al clonar cohorte:", err)
+      showNotification("Error al clonar cohorte: " + (err.message || err), "error")
+    } finally {
+      setCloning(false)
+    }
+  }
 
   // --- SECTION CRUD ---
   const handleSaveSeccion = async (e) => {
@@ -214,19 +411,20 @@ export default function QuestionConfig() {
         const newSec = {
           id: Date.now(),
           nombre,
-          orden: ordenNum
+          orden: ordenNum,
+          id_cohorte: selectedCohorteId
         }
         setSecciones(prev => [...prev, newSec].sort((a, b) => a.orden - b.orden))
         setSelectedSeccionId(newSec.id)
       } else {
         const { data, error: insErr } = await supabase
           .from('secciones')
-          .insert({ nombre, orden: ordenNum })
+          .insert({ nombre, orden: ordenNum, id_cohorte: selectedCohorteId })
           .select()
+          .maybeSingle()
 
         if (insErr) throw insErr
-        const inserted = data?.[0]
-        await loadData(inserted?.id)
+        await loadData(selectedCohorteId, data?.id)
       }
       setIsSeccionModalOpen(false)
       setSeccionForm({ id: null, nombre: '', orden: '' })
@@ -249,6 +447,10 @@ export default function QuestionConfig() {
       requerida: false,
       activa: true
     })
+    setTableMode('fijo')
+    setTableColumns([
+      { id: Date.now(), key: 'cantidad', label: 'Cantidad', tipo: 'numero', opciones: [] }
+    ])
     setTempOptions([])
     setIsPreguntaModalOpen(true)
   }
@@ -264,7 +466,24 @@ export default function QuestionConfig() {
       requerida: preg.requerida,
       activa: preg.activa
     })
-    setTempOptions(preg.opciones_pregunta || [])
+    if (preg.tipo === 'tabla') {
+      const modo = preg.config?.modo
+      const mode = modo === 'dinamico' ? 'dinamico' : (modo === 'fijo' ? 'fijo' : 'grupos')
+      setTableMode(mode)
+      const cols = (preg.config?.columnas || []).map((c, i) => ({
+        id: Date.now() + i,
+        key: c.key || '',
+        label: c.label || '',
+        tipo: c.tipo || 'texto',
+        opciones: Array.isArray(c.opciones) ? c.opciones : []
+      }))
+      setTableColumns(cols.length > 0 ? cols : [{ id: Date.now(), key: 'cantidad', label: 'Cantidad', tipo: 'numero', opciones: [] }])
+      setTempOptions((preg.opciones_pregunta || []).map(o => ({ ...o })))
+    } else {
+      setTableMode('fijo')
+      setTableColumns([{ id: Date.now(), key: 'cantidad', label: 'Cantidad', tipo: 'numero', opciones: [] }])
+      setTempOptions(preg.opciones_pregunta || [])
+    }
     setIsPreguntaModalOpen(true)
   }
 
@@ -303,6 +522,32 @@ export default function QuestionConfig() {
     const seccionIdNum = parseInt(id_seccion)
     const ordenNum = parseInt(orden) || 1
 
+    let configObj = null
+    if (tipo === 'tabla') {
+      const cleanCols = (tableMode === 'grupos' ? [] : tableColumns).map(c => {
+        const col = {
+          key: c.key?.trim() || c.label.toLowerCase().trim().replace(/[^a-z0-9]/g, '_') || 'col',
+          label: c.label?.trim() || c.key || 'Columna',
+          tipo: c.tipo || 'texto'
+        }
+        if (col.tipo === 'opcion') {
+          const opts = Array.isArray(c.opciones)
+            ? c.opciones
+            : typeof c.opciones === 'string'
+              ? c.opciones.split(',').map(s => s.trim()).filter(Boolean)
+              : []
+          if (opts.length > 0) col.opciones = opts
+        }
+        return col
+      })
+      configObj = {
+        modo: tableMode === 'grupos' ? null : tableMode,
+        columnas: cleanCols
+      }
+    }
+
+    const shouldSaveOptions = tipo === 'opcion' || tipo === 'array' || (tipo === 'tabla' && (tableMode === 'fijo' || tableMode === 'grupos'))
+
     try {
       if (usingMockData) {
         if (id) {
@@ -316,7 +561,8 @@ export default function QuestionConfig() {
             tipo,
             requerida,
             activa,
-            opciones_pregunta: (tipo === 'opcion' || tipo === 'array') ? tempOptions : []
+            config: configObj,
+            opciones_pregunta: shouldSaveOptions ? tempOptions : []
           } : p))
         } else {
           // Create
@@ -329,14 +575,25 @@ export default function QuestionConfig() {
             tipo,
             requerida,
             activa,
-            opciones_pregunta: (tipo === 'opcion' || tipo === 'array') ? tempOptions : []
+            config: configObj,
+            id_cohorte: selectedCohorteId,
+            opciones_pregunta: shouldSaveOptions ? tempOptions : []
           }
           setPreguntas(prev => [...prev, newPreg])
         }
       } else {
-        const payload = { id_seccion: seccionIdNum, orden: ordenNum, codigo, texto, tipo, requerida, activa }
         if (id) {
           // Edit in Supabase
+          const payload = {
+            id_seccion: seccionIdNum,
+            orden: ordenNum,
+            codigo,
+            texto,
+            tipo,
+            requerida,
+            activa,
+            config: configObj
+          }
           const { error: updErr } = await supabase
             .from('preguntas')
             .update(payload)
@@ -344,37 +601,50 @@ export default function QuestionConfig() {
 
           if (updErr) throw updErr
 
-          // Handle choice options if dynamic type
-          if (tipo === 'opcion' || tipo === 'array') {
-            // Delete old options and insert tempOptions
+          // Handle options in Supabase
+          if (shouldSaveOptions) {
             await supabase.from('opciones_pregunta').delete().eq('id_pregunta', id)
             if (tempOptions.length > 0) {
               const optionsPayload = tempOptions.map((opt, i) => ({
                 id_pregunta: id,
                 etiqueta: opt.etiqueta,
-                valor: opt.valor,
+                valor: opt.valor || opt.etiqueta.toLowerCase().trim().replace(/[^a-z0-9]/g, '_'),
                 orden: opt.orden || (i + 1)
               }))
               const { error: optErr } = await supabase.from('opciones_pregunta').insert(optionsPayload)
               if (optErr) throw optErr
             }
+          } else {
+            await supabase.from('opciones_pregunta').delete().eq('id_pregunta', id)
           }
         } else {
-          // Insert Pregunta
+          // Insert Pregunta scoped by selected cohorte
+          const payload = {
+            id_seccion: seccionIdNum,
+            orden: ordenNum,
+            codigo,
+            texto,
+            tipo,
+            requerida,
+            activa,
+            config: configObj,
+            id_cohorte: selectedCohorteId
+          }
           const { data: newPregData, error: insErr } = await supabase
             .from('preguntas')
             .insert(payload)
             .select()
+            .maybeSingle()
 
           if (insErr) throw insErr
-          const newPregId = newPregData?.[0]?.id
+          const newPregId = newPregData?.id
 
           // Insert options if exists
-          if (newPregId && (tipo === 'opcion' || tipo === 'array') && tempOptions.length > 0) {
+          if (newPregId && shouldSaveOptions && tempOptions.length > 0) {
             const optionsPayload = tempOptions.map((opt, i) => ({
               id_pregunta: newPregId,
               etiqueta: opt.etiqueta,
-              valor: opt.valor,
+              valor: opt.valor || opt.etiqueta.toLowerCase().trim().replace(/[^a-z0-9]/g, '_'),
               orden: opt.orden || (i + 1)
             }))
             const { error: optErr } = await supabase.from('opciones_pregunta').insert(optionsPayload)
@@ -626,7 +896,7 @@ export default function QuestionConfig() {
             </div>
           )}
           <button 
-            onClick={() => loadData(selectedSeccionId)}
+            onClick={() => loadData(selectedCohorteId, selectedSeccionId)}
             className="material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer"
             title="Recargar"
           >
@@ -638,6 +908,44 @@ export default function QuestionConfig() {
       {/* Main Container */}
       <main className="md:ml-64 pt-24 pb-32 px-margin-mobile md:px-margin-desktop flex flex-col gap-lg max-w-7xl mx-auto w-full flex-grow">
         
+        {/* Cohorte Selector & Clone Bar */}
+        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-custom-sm p-md flex flex-col sm:flex-row items-center justify-between gap-md">
+          <div className="flex items-center gap-md w-full sm:w-auto">
+            <div className="flex items-center gap-sm">
+              <span className="material-symbols-outlined text-primary text-[22px]">calendar_month</span>
+              <span className="font-label-md text-label-md font-bold text-on-surface whitespace-nowrap">
+                Cohorte:
+              </span>
+            </div>
+            <select
+              className="bg-surface-container rounded-xl border border-outline-variant/30 px-3 py-2 text-sm font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer flex-1 sm:flex-none min-w-[200px]"
+              value={selectedCohorteId || ''}
+              onChange={(e) => {
+                const newId = Number(e.target.value)
+                setSelectedCohorteId(newId)
+                loadData(newId)
+              }}
+            >
+              {cohortes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} {!c.activa ? '(Inactiva)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => {
+              setCloneForm({ nombre: '', descripcion: '' })
+              setIsCloneModalOpen(true)
+            }}
+            className="w-full sm:w-auto bg-secondary text-on-secondary px-lg py-2.5 rounded-xl font-label-md text-label-md flex items-center justify-center gap-xs hover:bg-secondary-container hover:text-secondary transition-all active:scale-95 cursor-pointer border-none shadow-sm font-semibold"
+          >
+            <span className="material-symbols-outlined text-[18px]">content_copy</span>
+            <span>Clonar cuestionario a cohorte nueva</span>
+          </button>
+        </section>
+
         {/* Filters Top Bar */}
         <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-custom-sm p-md flex flex-col md:flex-row items-center justify-between gap-md">
           {/* Search Input */}
@@ -669,6 +977,7 @@ export default function QuestionConfig() {
                 <option value="boolean">Sí / No</option>
                 <option value="opcion">Opción Única</option>
                 <option value="array">Opción Múltiple</option>
+                <option value="tabla">Tabla</option>
               </select>
             </div>
 
@@ -831,7 +1140,7 @@ export default function QuestionConfig() {
                             Editar
                           </button>
 
-                          {(preg.tipo === 'opcion' || preg.tipo === 'array') && (
+                          {(preg.tipo === 'opcion' || preg.tipo === 'array' || preg.tipo === 'tabla') && (
                             <button
                               onClick={() => handleToggleOptionsExpand(preg.id)}
                               className="text-primary hover:bg-primary/5 px-3 py-1.5 rounded-xl font-label-md text-label-md transition-all flex items-center gap-xs border-none bg-transparent cursor-pointer font-semibold"
@@ -839,11 +1148,66 @@ export default function QuestionConfig() {
                               <span className="material-symbols-outlined text-[18px]">
                                 {isExpanded ? 'expand_less' : 'expand_more'}
                               </span>
-                              Opciones ({optionsList.length})
+                              {preg.tipo === 'tabla' ? 'Estructura de Tabla' : `Opciones (${optionsList.length})`}
                             </button>
                           )}
                         </div>
                       </div>
+
+                      {/* Table Structure Expanded Section */}
+                      {isExpanded && preg.tipo === 'tabla' && (
+                        <div className="bg-surface-container/40 rounded-xl p-sm border border-outline-variant/35 space-y-sm mt-xs text-xs">
+                          <div className="flex items-center justify-between px-2">
+                            <span className="font-label-sm text-label-sm font-bold text-outline uppercase tracking-wider">
+                              Configuración de Tabla
+                            </span>
+                            <span className="font-mono px-2 py-0.5 rounded bg-surface-container-high text-on-surface font-semibold">
+                              Modo: {preg.config?.modo === 'dinamico' ? 'Dinámico' : (preg.config?.modo === 'fijo' ? 'Filas Fijas' : 'Grupos Vulnerables (Predeterminado)')}
+                            </span>
+                          </div>
+
+                          {/* Columns summary */}
+                          {(!preg.config?.modo || preg.config?.modo === 'fijo' || preg.config?.modo === 'dinamico') && (
+                            <div className="px-2 space-y-1">
+                              <span className="font-semibold text-on-surface-variant block">Columnas ({preg.config?.columnas?.length || 0}):</span>
+                              {(!preg.config?.columnas || preg.config.columnas.length === 0) ? (
+                                <p className="text-on-surface-variant/70 italic">Columnas por defecto del sistema.</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {preg.config.columnas.map((col, idx) => (
+                                    <span key={idx} className="bg-surface-container-lowest border border-outline-variant/30 px-2 py-1 rounded-md text-on-surface font-mono text-[11px] shadow-custom-sm">
+                                      <strong className="font-sans font-semibold text-on-surface">{col.label || col.key}</strong> ({col.tipo})
+                                      {col.tipo === 'opcion' && col.opciones?.length > 0 && (
+                                        <span className="text-outline ml-1">[{col.opciones.join(', ')}]</span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Fixed rows summary if applicable */}
+                          {(preg.config?.modo === 'fijo' || !preg.config?.modo) && (
+                            <div className="px-2 space-y-1 border-t border-outline-variant/20 pt-1.5">
+                              <span className="font-semibold text-on-surface-variant block">
+                                {preg.config?.modo === 'fijo' ? `Filas Fijas (${optionsList.length}):` : `Grupos / Opciones (${optionsList.length}):`}
+                              </span>
+                              {optionsList.length === 0 ? (
+                                <p className="text-on-surface-variant/70 italic">No hay filas predefinidas cargadas.</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-1">
+                                  {optionsList.map(opt => (
+                                    <span key={opt.id} className="bg-surface-container-lowest border border-outline-variant/20 px-2 py-0.5 rounded text-[11px] text-on-surface">
+                                      #{opt.orden} {opt.etiqueta}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* Options Inline section */}
                       {isExpanded && (preg.tipo === 'opcion' || preg.tipo === 'array') && (
@@ -998,7 +1362,7 @@ export default function QuestionConfig() {
       {/* MODAL: FormPregunta */}
       {isPreguntaModalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in overflow-y-auto">
-          <div className="bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant w-[95%] max-w-[650px] p-6 space-y-4 my-8">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant w-[95%] max-w-[700px] p-6 space-y-4 my-8 max-h-[90vh] overflow-y-auto">
             <div>
               <h2 className="text-headline-md font-bold text-primary">
                 {preguntaForm.id ? 'Editar Pregunta' : 'Nueva Pregunta'}
@@ -1063,6 +1427,7 @@ export default function QuestionConfig() {
                     <option value="boolean">Sí / No (Booleano)</option>
                     <option value="opcion">Opción Única</option>
                     <option value="array">Opción Múltiple (Lista)</option>
+                    <option value="tabla">Tabla</option>
                   </select>
                 </div>
 
@@ -1122,6 +1487,205 @@ export default function QuestionConfig() {
                   <span className="font-label-md text-label-md text-on-surface font-semibold">Pregunta Activa</span>
                 </label>
               </div>
+
+              {/* Configuration sub-form when type is 'tabla' */}
+              {preguntaForm.tipo === 'tabla' && (
+                <div className="bg-surface-container/50 border border-outline-variant/30 rounded-xl p-md space-y-md">
+                  <div className="flex justify-between items-center">
+                    <span className="font-label-md text-label-md font-bold text-primary uppercase tracking-wider">
+                      Configuración de Tabla
+                    </span>
+                  </div>
+
+                  {/* Modo Selector */}
+                  <div className="space-y-sm">
+                    <label className="block text-xs font-semibold text-on-surface">
+                      Modo de Estructura de Tabla
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTableMode('fijo')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          tableMode === 'fijo'
+                            ? 'bg-primary/10 border-primary text-primary font-bold'
+                            : 'bg-surface-container border-outline-variant/30 text-on-surface-variant hover:border-outline-variant'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">Filas Fijas</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">Filas predefinidas con columnas personalizadas</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTableMode('dinamico')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          tableMode === 'dinamico'
+                            ? 'bg-primary/10 border-primary text-primary font-bold'
+                            : 'bg-surface-container border-outline-variant/30 text-on-surface-variant hover:border-outline-variant'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">Filas Dinámicas</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">El usuario agrega y quita filas en el cuestionario</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setTableMode('grupos')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          tableMode === 'grupos'
+                            ? 'bg-primary/10 border-primary text-primary font-bold'
+                            : 'bg-surface-container border-outline-variant/30 text-on-surface-variant hover:border-outline-variant'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">Grupos Predeterminados</div>
+                        <div className="text-[10px] opacity-80 mt-0.5">Grupos vulnerables fijos con columnas estándar</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Column Editor (for 'fijo' and 'dinamico' modes) */}
+                  {(tableMode === 'fijo' || tableMode === 'dinamico') && (
+                    <div className="space-y-sm border-t border-outline-variant/20 pt-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-on-surface uppercase tracking-wider">
+                          Columnas de la Tabla ({tableColumns.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleAddTableColumn}
+                          className="text-primary hover:bg-primary/10 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border-none bg-transparent cursor-pointer flex items-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                          Agregar Columna
+                        </button>
+                      </div>
+
+                      {tableColumns.length === 0 ? (
+                        <p className="text-xs text-on-surface-variant/75 italic">
+                          No hay columnas configuradas. Agregue al menos una columna.
+                        </p>
+                      ) : (
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {tableColumns.map((col) => (
+                            <div key={col.id} className="p-2.5 bg-surface-container-lowest border border-outline-variant/30 rounded-xl space-y-2">
+                              <div className="flex gap-2 items-center">
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Etiqueta columna (Ej: Cantidad)"
+                                  className="flex-1 h-9 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs"
+                                  value={col.label}
+                                  onChange={(e) => handleUpdateTableColumn(col.id, 'label', e.target.value)}
+                                />
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="Clave (Ej: cantidad)"
+                                  className="w-32 h-9 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs font-mono"
+                                  value={col.key}
+                                  onChange={(e) => handleUpdateTableColumn(col.id, 'key', e.target.value)}
+                                />
+                                <select
+                                  className="w-28 h-9 px-2 bg-surface-container rounded-lg border border-outline-variant/20 text-xs cursor-pointer"
+                                  value={col.tipo}
+                                  onChange={(e) => handleUpdateTableColumn(col.id, 'tipo', e.target.value)}
+                                >
+                                  <option value="texto">Texto</option>
+                                  <option value="numero">Número</option>
+                                  <option value="boolean">Sí / No</option>
+                                  <option value="opcion">Opciones</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveTableColumn(col.id)}
+                                  className="material-symbols-outlined text-outline hover:text-error transition-colors p-1 bg-transparent border-none cursor-pointer"
+                                  title="Eliminar columna"
+                                >
+                                  delete
+                                </button>
+                              </div>
+
+                              {col.tipo === 'opcion' && (
+                                <div className="pl-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Opciones separadas por coma (Ej: Bajo, Medio, Alto)"
+                                    className="w-full h-8 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs"
+                                    value={Array.isArray(col.opciones) ? col.opciones.join(', ') : (col.opciones || '')}
+                                    onChange={(e) => handleUpdateTableColumn(col.id, 'opciones', e.target.value)}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Fixed Rows Editor (for 'fijo' and 'grupos' modes) */}
+                  {(tableMode === 'fijo' || tableMode === 'grupos') && (
+                    <div className="space-y-sm border-t border-outline-variant/20 pt-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-on-surface uppercase tracking-wider">
+                          {tableMode === 'fijo' ? 'Filas Fijas Predefinidas' : 'Grupos Vulnerables Fijos'} ({tempOptions.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleAddTempOption}
+                          className="text-primary hover:bg-primary/10 px-2.5 py-1 rounded-lg text-xs font-bold transition-all border-none bg-transparent cursor-pointer flex items-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                          {tableMode === 'fijo' ? 'Agregar Fila' : 'Agregar Grupo'}
+                        </button>
+                      </div>
+
+                      {tempOptions.length === 0 ? (
+                        <p className="text-xs text-on-surface-variant/75 italic">
+                          No hay filas predefinidas. Agregue al menos una fila fija para esta tabla.
+                        </p>
+                      ) : (
+                        <div className="space-y-sm max-h-48 overflow-y-auto pr-1">
+                          {tempOptions.map((opt) => (
+                            <div key={opt.id} className="flex gap-sm items-center">
+                              <input 
+                                type="text"
+                                required
+                                placeholder="Nombre de fila / Grupo"
+                                className="flex-1 h-9 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs"
+                                value={opt.etiqueta}
+                                onChange={(e) => handleUpdateTempOption(opt.id, 'etiqueta', e.target.value)}
+                              />
+                              <input 
+                                type="text"
+                                placeholder="Clave BD (valor)"
+                                className="w-32 h-9 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs font-mono"
+                                value={opt.valor}
+                                onChange={(e) => handleUpdateTempOption(opt.id, 'valor', e.target.value)}
+                              />
+                              <input 
+                                type="number"
+                                placeholder="Orden"
+                                className="w-16 h-9 px-3 bg-surface-container rounded-lg border border-outline-variant/20 text-xs"
+                                value={opt.orden || ''}
+                                onChange={(e) => handleUpdateTempOption(opt.id, 'orden', e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTempOption(opt.id)}
+                                className="material-symbols-outlined text-outline hover:text-error transition-colors p-2 bg-transparent border-none cursor-pointer"
+                              >
+                                delete
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Dynamic options when type is 'opcion' or 'array' */}
               {(preguntaForm.tipo === 'opcion' || preguntaForm.tipo === 'array') && (
@@ -1197,6 +1761,73 @@ export default function QuestionConfig() {
                   className="px-lg py-sm rounded-xl bg-primary text-on-primary hover:bg-primary-container text-label-md font-bold transition-all active:scale-95 border-none cursor-pointer"
                 >
                   Guardar Pregunta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Clone Cohorte */}
+      {isCloneModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-custom-md border border-outline-variant w-[95%] max-w-[500px] p-6 space-y-4">
+            <div>
+              <h2 className="text-headline-md font-bold text-primary">
+                Clonar Cuestionario a Nueva Cohorte
+              </h2>
+              <p className="font-body-md text-body-md text-on-surface-variant mt-sm">
+                Se creará una nueva cohorte y se copiarán todas las secciones, preguntas y opciones de la cohorte seleccionada ({cohortes.find(c => c.id === selectedCohorteId)?.nombre || 'actual'}).
+              </p>
+            </div>
+
+            <form onSubmit={handleCloneCohorte} className="w-full space-y-4">
+              <div className="space-y-2">
+                <label className="block text-label-md text-on-surface font-semibold" htmlFor="cloneNombre">
+                  Nombre de la Nueva Cohorte
+                </label>
+                <input
+                  id="cloneNombre"
+                  type="text"
+                  required
+                  placeholder="Ej: Cohorte 2026"
+                  className="w-full h-12 px-4 bg-surface-container rounded-xl border border-outline-variant focus:outline-none focus:ring-1 focus:ring-primary text-sm"
+                  value={cloneForm.nombre}
+                  onChange={(e) => setCloneForm(prev => ({ ...prev, nombre: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-label-md text-on-surface font-semibold" htmlFor="cloneDesc">
+                  Descripción (Opcional)
+                </label>
+                <textarea
+                  id="cloneDesc"
+                  rows="2"
+                  placeholder="Ej: Grupo de municipios incorporados en el ciclo 2026..."
+                  className="w-full p-3 bg-surface-container rounded-xl border border-outline-variant focus:outline-none focus:ring-1 focus:ring-primary text-sm resize-none"
+                  value={cloneForm.descripcion}
+                  onChange={(e) => setCloneForm(prev => ({ ...prev, descripcion: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  disabled={cloning}
+                  onClick={() => setIsCloneModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-high text-label-md transition-colors border-none bg-transparent cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={cloning}
+                  className="px-5 py-2.5 rounded-xl bg-primary text-on-primary hover:bg-primary-container text-label-md font-bold transition-all active:scale-95 border-none cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                >
+                  {cloning && <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>}
+                  {cloning ? 'Clonando...' : 'Clonar Cuestionario'}
                 </button>
               </div>
             </form>

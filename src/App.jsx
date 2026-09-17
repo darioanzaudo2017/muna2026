@@ -11,6 +11,7 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import UserManagement from './pages/UserManagement'
 import QuestionConfig from './pages/QuestionConfig'
+import LineasTematicasConfig from './pages/LineasTematicasConfig'
 import AutodiagnosticoLayout from './pages/AutodiagnosticoLayout'
 import PlanDeAccion from './pages/PlanDeAccion'
 import PlanDeAccionResumen from './pages/PlanDeAccionResumen'
@@ -65,6 +66,7 @@ function AppRoutes() {
       <Route path="/identidad-visual" element={<ProtectedRoute><IdentidadVisual /></ProtectedRoute>} />
       <Route path="/admin/usuarios" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/admin/preguntas" element={<ProtectedRoute><QuestionConfig /></ProtectedRoute>} />
+      <Route path="/admin/lineas-tematicas" element={<ProtectedRoute><LineasTematicasConfig /></ProtectedRoute>} />
       <Route path="/municipio/:id" element={<ProtectedRoute><MunicipioDashboard /></ProtectedRoute>} />
       <Route path="/municipio/:id/autodiagnostico/:idAutodiagnostico" element={<ProtectedRoute><AutodiagnosticoLayout /></ProtectedRoute>} />
       <Route path="/municipio/:id/seccion/:idSeccion" element={<ProtectedRoute><SeccionRedirect /></ProtectedRoute>} />

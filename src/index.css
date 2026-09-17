@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Baloo+2:wght@600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
 
 @import "tailwindcss";
@@ -6,22 +6,26 @@
 @theme {
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   
-  --color-primary: #00685f;
+  /* Paleta oficial DDNA (Manual de Identidad Visual 2026) */
+  --color-primary: #ff7f11;
   --color-on-primary: #ffffff;
-  --color-primary-container: #008378;
-  --color-on-primary-container: #f4fffc;
-  --color-inverse-primary: #6bd8cb;
-  
-  --color-secondary: #006c49;
+  --color-primary-container: #f3a712;
+  --color-on-primary-container: #3a2600;
+  --color-inverse-primary: #ffd9a8;
+
+  --color-secondary: #3777ff;
   --color-on-secondary: #ffffff;
-  --color-secondary-container: #6cf8bb;
-  --color-on-secondary-container: #00714d;
-  
-  --color-tertiary: #924628;
+  --color-secondary-container: #d6e4ff;
+  --color-on-secondary-container: #0b196d;
+
+  --color-tertiary: #bf1363;
   --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #b05e3d;
-  --color-on-tertiary-container: #fffbff;
-  
+  --color-tertiary-container: #ffd6e8;
+  --color-on-tertiary-container: #4a0027;
+
+  --color-brand-navy: #0b196d;
+  --color-on-brand-navy: #ffffff;
+
   --color-error: #ba1a1a;
   --color-on-error: #ffffff;
   --color-error-container: #ffdad6;
@@ -54,19 +58,21 @@
   --spacing-margin-mobile: 16px;
   --spacing-margin-desktop: 48px;
 
-  /* Accent colors for 12 sections */
-  --color-section-1: #3b82f6;
-  --color-section-2: #6366f1;
-  --color-section-3: #ec4899;
-  --color-section-4: #f43f5e;
-  --color-section-5: #a855f7;
-  --color-section-6: #14b8a6;
-  --color-section-7: #f59e0b;
-  --color-section-8: #8b5cf6;
-  --color-section-9: #10b981;
-  --color-section-10: #06b6d4;
-  --color-section-11: #f97316;
-  --color-section-12: #64748b;
+  /* Accent colors for 12 sections — los 6 colores oficiales de la paleta
+     DDNA (1-6) + sus variantes de valor hacia blanco/negro (7-12), tal
+     como habilita el manual de marca (nunca se migra hacia otro tono). */
+  --color-section-1: #3777ff;
+  --color-section-2: #ff7f11;
+  --color-section-3: #16c172;
+  --color-section-4: #bf1363;
+  --color-section-5: #f3a712;
+  --color-section-6: #0b196d;
+  --color-section-7: #7ea6ff;
+  --color-section-8: #ffab5c;
+  --color-section-9: #5fe0a6;
+  --color-section-10: #e0569c;
+  --color-section-11: #c98300;
+  --color-section-12: #3d54b0;
 }
 
 body {
@@ -105,16 +111,20 @@ body {
 }
 
 /* Custom Typography Helpers */
-.font-display { font-family: 'Inter', sans-serif; font-weight: 700; }
+/* Títulos: Baloo 2 — alternativa gratuita más cercana a "Forma DJR Banner
+   Bold" (tipografía comercial pedida por el manual de marca DDNA) que
+   está disponible en Google Fonts. Cuerpo de texto sigue en Inter, que
+   cumple un rol similar al de "Fieldwork Geo Regular" del manual. */
+.font-display { font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 800; }
 .text-display { font-size: 36px; line-height: 44px; letter-spacing: -0.02em; }
 
-.font-headline-lg { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-headline-lg { font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 700; }
 .text-headline-lg { font-size: 28px; line-height: 36px; }
 
-.font-headline-lg-mobile { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-headline-lg-mobile { font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 700; }
 .text-headline-lg-mobile { font-size: 24px; line-height: 32px; }
 
-.font-headline-md { font-family: 'Inter', sans-serif; font-weight: 600; }
+.font-headline-md { font-family: 'Baloo 2', 'Inter', sans-serif; font-weight: 700; }
 .text-headline-md { font-size: 20px; line-height: 28px; }
 
 .font-body-lg { font-family: 'Inter', sans-serif; font-weight: 400; }

@@ -4,6 +4,7 @@ import SlideBar from '../components/SlideBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase, getOrCreateAutodiagnostico } from '../lib/supabase'
 import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
+import { descargarWordAutodiagnostico } from '../lib/wordAutodiagnostico'
 import PlanDeAccion from './PlanDeAccion'
 
 // 12 sections template data with default icons and metrics (for Autodiagnóstico tab)
@@ -46,51 +47,107 @@ export default function MunicipioDashboard() {
   const [triggerAddAction, setTriggerAddAction] = useState(0)
 
   const [muniNombre, setMuniNombre] = useState('')
+  const [cohortesList, setCohortesList] = useState([])
+  const [selectedCohorteId, setSelectedCohorteId] = useState(null)
+  const [allAutodiags, setAllAutodiags] = useState([])
   const [idAutodiagnostico, setIdAutodiagnostico] = useState(null)
   const [currentProgress, setCurrentProgress] = useState(0)
   const [currentStatus, setCurrentStatus] = useState('Pendiente')
   const [dynamicSectionProgress, setDynamicSectionProgress] = useState({})
   const [seccionesConPreguntas, setSeccionesConPreguntas] = useState(null)
+  const [seccionesList, setSeccionesList] = useState([])
   const [dashboardLoading, setDashboardLoading] = useState(true)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [downloadingWord, setDownloadingWord] = useState(false)
 
+  // Carga inicial del municipio y sus autodiagnósticos/cohortes
   useEffect(() => {
-    async function loadDashboard() {
+    async function loadMunicipioAndCohortes() {
       setDashboardLoading(true)
       try {
-        // Municipio name
+        // Municipio name & cohorte
         const { data: muniData } = await supabase
           .from('municipios')
-          .select('nombre')
+          .select('nombre, id_cohorte')
           .eq('id', munId)
-          .single()
+          .maybeSingle()
         if (muniData) setMuniNombre(muniData.nombre)
 
-        // Get or create autodiagnóstico for this municipio
-        const autodiagId = await getOrCreateAutodiagnostico(munId, 2025)
-        setIdAutodiagnostico(autodiagId)
-        if (!autodiagId) return
+        // Asegurar autodiagnóstico base
+        await getOrCreateAutodiagnostico(munId, 2025)
 
-        // Load autodiagnóstico estado
-        const { data: autodiag } = await supabase
+        // Traer todos los autodiagnosticos del municipio con su cohorte
+        const { data: autodiagsData } = await supabase
           .from('autodiagnosticos')
-          .select('estado')
-          .eq('id', autodiagId)
-          .single()
-        if (autodiag) {
-          setCurrentStatus(autodiag.estado === 'completo' ? 'Completado' : autodiag.estado === 'borrador' ? 'Pendiente' : 'En Proceso')
+          .select('id, estado, id_cohorte, cohortes(id, nombre)')
+          .eq('idmunicipio', munId)
+          .order('id_cohorte', { ascending: true })
+
+        const autodiags = autodiagsData || []
+        setAllAutodiags(autodiags)
+
+        // Extraer lista única de cohortes
+        const cohMap = new Map()
+        autodiags.forEach(ad => {
+          const cid = ad.id_cohorte ?? muniData?.id_cohorte
+          if (cid && !cohMap.has(cid)) {
+            cohMap.set(cid, {
+              id_cohorte: cid,
+              nombre: ad.cohortes?.nombre || `Cohorte ${cid}`,
+              idAutodiagnostico: ad.id,
+              estado: ad.estado
+            })
+          }
+        })
+        const list = Array.from(cohMap.values())
+        setCohortesList(list)
+
+        const defaultCohId = muniData?.id_cohorte || list[0]?.id_cohorte || null
+        setSelectedCohorteId(prev => (prev && list.some(c => c.id_cohorte === prev) ? prev : defaultCohId))
+      } catch (err) {
+        console.error('Error loading municipio and cohortes:', err)
+      } finally {
+        setDashboardLoading(false)
+      }
+    }
+    loadMunicipioAndCohortes()
+  }, [munId])
+
+  // Recalcular autodiagnóstico y progreso cuando cambia selectedCohorteId
+  useEffect(() => {
+    async function recalculateAutodiagnostico() {
+      if (!selectedCohorteId && !munId) return
+
+      try {
+        const matched = allAutodiags.find(a => a.id_cohorte === selectedCohorteId) || allAutodiags[0]
+        const autodiagId = matched?.id ?? null
+        setIdAutodiagnostico(autodiagId)
+
+        if (matched) {
+          setCurrentStatus(matched.estado === 'completo' ? 'Completado' : matched.estado === 'borrador' ? 'Pendiente' : 'En Proceso')
         }
 
-        // Load secciones and preguntas to compute per-section progress
+        // Load secciones and preguntas to compute per-section progress for this cohorte
+        let secQuery = supabase.from('secciones').select('id, nombre, orden').order('orden')
+        let pregQuery = supabase.from('preguntas').select('id, id_seccion, tipo').eq('activa', true).order('orden')
+
+        if (selectedCohorteId) {
+          secQuery = secQuery.eq('id_cohorte', selectedCohorteId)
+          pregQuery = pregQuery.eq('id_cohorte', selectedCohorteId)
+        }
+
         const [{ data: secsData }, { data: pregsData }, { data: respsData }] = await Promise.all([
-          supabase.from('secciones').select('id, orden').order('orden'),
-          supabase.from('preguntas').select('id, id_seccion, tipo').eq('activa', true),
-          supabase.from('respuestas').select('id_pregunta, valor_texto, valor_numerico, valor_array').eq('id_autodiagnostico', autodiagId),
+          secQuery,
+          pregQuery,
+          autodiagId
+            ? supabase.from('respuestas').select('id_pregunta, valor_texto, valor_numerico, valor_array').eq('id_autodiagnostico', autodiagId)
+            : Promise.resolve({ data: [] }),
         ])
 
         const pregs = pregsData ?? []
         const resps = respsData ?? []
         const secs = secsData ?? []
+        setSeccionesList(secs)
 
         const respsMap = {}
         resps.forEach(r => { respsMap[r.id_pregunta] = r })
@@ -120,13 +177,12 @@ export default function MunicipioDashboard() {
         const totalPregs = pregs.length
         setCurrentProgress(totalPregs > 0 ? Math.round((totalAnswered / totalPregs) * 100) : 0)
       } catch (err) {
-        console.error('Error loading dashboard:', err)
-      } finally {
-        setDashboardLoading(false)
+        console.error('Error recalculating autodiagnostico:', err)
       }
     }
-    loadDashboard()
-  }, [munId])
+
+    recalculateAutodiagnostico()
+  }, [selectedCohorteId, allAutodiags, munId])
 
   const muni = { nombre: muniNombre || '...' }
 
@@ -142,9 +198,22 @@ export default function MunicipioDashboard() {
     }
   }
 
+  const handleDownloadWord = async () => {
+    if (!idAutodiagnostico) return
+    setDownloadingWord(true)
+    try {
+      await descargarWordAutodiagnostico({ idAutodiagnostico, idMunicipio: munId })
+    } catch (err) {
+      console.error('Error generando Word:', err)
+    } finally {
+      setDownloadingWord(false)
+    }
+  }
+
   const handleMarkCompleteInline = async () => {
     if (!idAutodiagnostico) return
     await supabase.from('autodiagnosticos').update({ estado: 'completo' }).eq('id', idAutodiagnostico)
+    setAllAutodiags(prev => prev.map(a => a.id === idAutodiagnostico ? { ...a, estado: 'completo' } : a))
     setCurrentStatus('Completado')
     setCurrentProgress(100)
   }
@@ -178,12 +247,13 @@ export default function MunicipioDashboard() {
     }
   })
 
-  // Map progress value, status text and status class based on index (for Autodiagnóstico tab)
-  const categories = SECCIONES_TEMPLATE.map((cat) => {
+  // Map progress value, status text and status class based on real BD secciones (for Autodiagnóstico tab)
+  const categories = seccionesList.map((sec) => {
+    const tmpl = SECCIONES_TEMPLATE.find(t => t.order === sec.orden)
     // Una sección es inactiva si no tiene preguntas activas en la BD
     // Mientras carga (null) usamos false para no bloquear nada
-    const isInactive = seccionesConPreguntas !== null ? !seccionesConPreguntas.has(cat.order) : false
-    const prog = isInactive ? 0 : (dynamicSectionProgress[cat.order] ?? 0)
+    const isInactive = seccionesConPreguntas !== null ? !seccionesConPreguntas.has(sec.id) : false
+    const prog = isInactive ? 0 : (dynamicSectionProgress[sec.id] ?? 0)
     
     let statusText = isInactive ? 'No disponible' : 'Pendiente'
     let statusClass = isInactive ? 'bg-surface-container-high text-outline/60 border border-outline-variant/30' : 'bg-gray-100 text-gray-600'
@@ -199,7 +269,11 @@ export default function MunicipioDashboard() {
     }
 
     return {
-      ...cat,
+      id: sec.id,
+      order: sec.orden,
+      name: sec.nombre, // Real name from secciones table
+      icon: sec.icon || tmpl?.icon || 'domain',
+      metrics: tmpl?.metrics || [],
       progress: prog,
       status: statusText,
       statusClass: statusClass,
@@ -320,7 +394,9 @@ export default function MunicipioDashboard() {
               <span className="text-primary font-bold">{muni.nombre}</span>
             </nav>
             <h1 className="font-display text-display text-on-surface">Plan de Acción — {muni.nombre}</h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant">Ciclo Operativo Año 2025</p>
+            <p className="font-body-lg text-body-lg text-on-surface-variant">
+              {cohortesList.find(c => c.id_cohorte === selectedCohorteId)?.nombre || 'Ciclo Operativo'}
+            </p>
           </div>
           
           <button 
@@ -377,6 +453,33 @@ export default function MunicipioDashboard() {
           </div>
         </section>
 
+        {/* Cohorte Tabs (shown if more than 1 distinct cohorte exists) */}
+        {cohortesList.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 mb-md p-1.5 bg-surface-container-low rounded-2xl w-fit border border-outline-variant/30 shadow-custom-sm">
+            <span className="text-xs font-bold text-outline uppercase tracking-wider px-3 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px]">event_repeat</span>
+              Cohorte:
+            </span>
+            {cohortesList.map(c => {
+              const isSelected = c.id_cohorte === selectedCohorteId
+              return (
+                <button
+                  key={c.id_cohorte}
+                  onClick={() => setSelectedCohorteId(c.id_cohorte)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border-none cursor-pointer flex items-center gap-2 ${
+                    isSelected
+                      ? 'bg-primary text-on-primary shadow-custom-sm'
+                      : 'bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">school</span>
+                  <span>{c.nombre}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex border-b border-outline-variant mb-lg">
           <button 
@@ -408,13 +511,13 @@ export default function MunicipioDashboard() {
               <div className="space-y-2 text-center md:text-left">
                 <div className="flex justify-center md:justify-start items-center gap-2 text-primary font-bold text-label-md uppercase tracking-wider">
                   <span className="material-symbols-outlined">fact_check</span>
-                  Autodiagnóstico Municipal 2026
+                  Autodiagnóstico Municipal
                 </div>
                 <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">
                   Relevamiento Técnico de Gestión
                 </h2>
                 <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl leading-relaxed">
-                  Complete las 12 secciones temáticas para evaluar el nivel de cumplimiento de las políticas de protección infantil en su municipio. Los cambios se guardan automáticamente.
+                  Complete las {seccionesList.length || 12} secciones temáticas para evaluar el nivel de cumplimiento de las políticas de protección infantil en su municipio. Los cambios se guardan automáticamente.
                 </p>
               </div>
 
@@ -431,6 +534,17 @@ export default function MunicipioDashboard() {
                   <span className="hidden lg:inline">PDF</span>
                 </button>
                 <button
+                  disabled={!idAutodiagnostico || downloadingWord}
+                  onClick={handleDownloadWord}
+                  title="Descargar Word del autodiagnóstico"
+                  className="border border-primary text-primary font-bold px-4 py-3.5 rounded-full flex items-center gap-2 hover:bg-primary hover:text-on-primary transition-all active:scale-95 bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className={`material-symbols-outlined ${downloadingWord ? 'animate-spin' : ''}`}>
+                    {downloadingWord ? 'sync' : 'description'}
+                  </span>
+                  <span className="hidden lg:inline">Word</span>
+                </button>
+                <button
                   disabled={!idAutodiagnostico}
                   onClick={() => navigate(`/municipio/${id}/autodiagnostico/${idAutodiagnostico}`)}
                   className="bg-primary text-on-primary font-bold px-8 py-3.5 rounded-full flex items-center gap-2 hover:bg-primary-container hover:text-primary transition-all active:scale-95 border-none cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
@@ -444,7 +558,7 @@ export default function MunicipioDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
               {categories.map((cat) => (
                 <div 
-                  key={cat.order} 
+                  key={cat.id || cat.order} 
                   className={`bg-surface-container-lowest p-6 rounded-2xl shadow-sm border-l-4 transition-shadow flex flex-col h-full justify-between border border-outline-variant ${
                     cat.isInactive 
                       ? 'border-l-outline-variant/30 opacity-60' 
@@ -494,7 +608,7 @@ export default function MunicipioDashboard() {
                     
                     <button 
                       disabled={cat.isInactive}
-                      onClick={() => idAutodiagnostico && navigate(`/municipio/${id}/autodiagnostico/${idAutodiagnostico}`, { state: { initialSectionId: cat.order } })}
+                      onClick={() => idAutodiagnostico && navigate(`/municipio/${id}/autodiagnostico/${idAutodiagnostico}`, { state: { initialSectionId: cat.id } })}
                       className={`w-full py-2.5 border font-label-md rounded-lg flex items-center justify-center gap-2 cursor-pointer bg-transparent transition-colors ${
                         cat.isInactive
                           ? 'border-outline-variant/30 text-outline/40 cursor-not-allowed'
@@ -531,6 +645,7 @@ export default function MunicipioDashboard() {
           <PlanDeAccion 
             isDashboardTab={true} 
             idMunicipio={munId}
+            idCohorte={selectedCohorteId}
             triggerAddLine={triggerAddLine}
             triggerAddAction={triggerAddAction}
           />

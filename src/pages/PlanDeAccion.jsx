@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 export default function PlanDeAccion({
   isDashboardTab = false,
   idMunicipio: idMunicipioProp,
+  idCohorte: idCohorteProp,
   triggerAddLine = 0,
   triggerAddAction = 0
 }) {
@@ -20,6 +21,7 @@ export default function PlanDeAccion({
   const [pivotLinks, setPivotLinks] = useState([])
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [resolvedCohorteId, setResolvedCohorteId] = useState(idCohorteProp ?? null)
 
   // Estados de UI
   const [activeTab, setActiveTab] = useState('acciones') // 'acciones' | 'metas'
@@ -40,40 +42,73 @@ export default function PlanDeAccion({
     setTimeout(() => setToast(null), 4000)
   }
 
+  useEffect(() => {
+    if (idCohorteProp !== undefined) {
+      setResolvedCohorteId(idCohorteProp)
+    } else {
+      supabase
+        .from('municipios')
+        .select('id_cohorte')
+        .eq('id', idMunicipio)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.id_cohorte) setResolvedCohorteId(data.id_cohorte)
+        })
+    }
+  }, [idMunicipio, idCohorteProp])
+
   // Carga de todos los datos necesarios
   const fetchAllData = useCallback(async () => {
     setLoading(true)
     try {
+      const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+
       // 1. Líneas temáticas del municipio
-      const { data: linesData, error: linesErr } = await supabase
+      let linesQuery = supabase
         .from('lineas_municipio')
-        .select('id, idlinea, idmunicipio, objetivo_general, lista_lineas_tematicas(nombre)')
+        .select('id, idlinea, idmunicipio, objetivo_general, id_cohorte, lista_lineas_tematicas(nombre)')
         .eq('idmunicipio', idMunicipio)
 
+      if (targetCohorteId) {
+        linesQuery = linesQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: linesData, error: linesErr } = await linesQuery
       if (linesErr) throw linesErr
 
       // 1b. Catálogo de líneas temáticas master
       const { data: masterLinesData, error: masterLinesErr } = await supabase
         .from('lista_lineas_tematicas')
         .select('*')
+        .eq('activa', true)
         .order('nombre')
 
       if (masterLinesErr) throw masterLinesErr
 
       // 2. Acciones del municipio
-      const { data: actionsData, error: actionsErr } = await supabase
+      let actionsQuery = supabase
         .from('acciones')
         .select('*')
         .eq('idmunicipio', idMunicipio)
 
+      if (targetCohorteId) {
+        actionsQuery = actionsQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: actionsData, error: actionsErr } = await actionsQuery
       if (actionsErr) throw actionsErr
 
       // 3. Metas del municipio
-      const { data: goalsData, error: goalsErr } = await supabase
+      let goalsQuery = supabase
         .from('metas_linea')
         .select('*')
         .eq('idmunicipio', idMunicipio)
 
+      if (targetCohorteId) {
+        goalsQuery = goalsQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: goalsData, error: goalsErr } = await goalsQuery
       if (goalsErr) throw goalsErr
 
       // 4. Pivot metas_acciones
@@ -84,12 +119,17 @@ export default function PlanDeAccion({
       if (pivotErr) throw pivotErr
 
       // 5. Intervenciones
-      const { data: interventionsData, error: interventionsErr } = await supabase
+      let interventionsQuery = supabase
         .from('intervenciones')
         .select('*')
         .eq('idmunicipio', idMunicipio)
         .order('fecha', { ascending: false })
 
+      if (targetCohorteId) {
+        interventionsQuery = interventionsQuery.eq('id_cohorte', targetCohorteId)
+      }
+
+      const { data: interventionsData, error: interventionsErr } = await interventionsQuery
       if (interventionsErr) throw interventionsErr
 
       setLines(linesData || [])
@@ -104,7 +144,7 @@ export default function PlanDeAccion({
     } finally {
       setLoading(false)
     }
-  }, [idMunicipio])
+  }, [idMunicipio, idCohorteProp, resolvedCohorteId])
 
   useEffect(() => {
     fetchAllData()
@@ -144,10 +184,13 @@ export default function PlanDeAccion({
         return
       }
 
+      const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+
       const payload = {
         idmunicipio: Number(idMunicipio),
         idlinea: Number(formData.idlinea),
-        objetivo_general: formData.objetivo_general
+        objetivo_general: formData.objetivo_general,
+        ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
       }
 
       if (lineModal.data?.id) {
@@ -185,6 +228,8 @@ export default function PlanDeAccion({
         return
       }
 
+      const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+
       const payload = {
         idmunicipio: Number(idMunicipio),
         idlinea_municipio: actionModal.lineId,
@@ -194,7 +239,8 @@ export default function PlanDeAccion({
         poblacion_objetivo: formData.poblacion_objetivo,
         resultado_esperado: formData.resultado_esperado,
         estado: formData.estado,
-        tipo: formData.tipo
+        tipo: formData.tipo,
+        ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
       }
 
       if (actionModal.data?.id) {
@@ -237,6 +283,8 @@ export default function PlanDeAccion({
     }
 
     try {
+      const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+
       const { error } = await supabase
         .from('intervenciones')
         .insert([{
@@ -245,6 +293,7 @@ export default function PlanDeAccion({
           fecha: formData.fecha || new Date().toISOString().split('T')[0],
           descripcion: formData.descripcion,
           adjunto_url: formData.adjunto_url ?? null,
+          ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
         }])
 
       if (error) throw error
@@ -269,6 +318,8 @@ export default function PlanDeAccion({
         return
       }
 
+      const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+
       const payload = {
         idmunicipio: Number(idMunicipio),
         id_linea_municipio: Number(formData.id_linea_municipio),
@@ -279,7 +330,8 @@ export default function PlanDeAccion({
         indicador_valor: Number(formData.indicador_valor) || 0,
         fecha_inicio: formData.fecha_inicio || null,
         fecha_final: formData.fecha_final || null,
-        estado: formData.estado
+        estado: formData.estado,
+        ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
       }
 
       let metaId = metaModal.data?.id
@@ -358,7 +410,7 @@ export default function PlanDeAccion({
       en_ejecucion: { text: 'En Ejecución', css: 'bg-secondary-container text-on-secondary-container' },
       completada: { text: 'Completada', css: 'bg-[#d1fae5] text-[#065f46]' }
     }
-    return states[status] || { text: status, css: 'bg-gray-100 text-gray-800' }
+    return states[status] || { text: status, css: 'bg-surface-container text-outline' }
   }
 
   const getMetaStatusBadge = (status) => {
@@ -421,7 +473,12 @@ export default function PlanDeAccion({
         </div>
 
         <button
-          onClick={() => navigate(`/municipio/${idMunicipio}/plan-de-accion/resumen`)}
+          onClick={() => {
+            const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+            navigate(`/municipio/${idMunicipio}/plan-de-accion/resumen`, {
+              state: { idCohorte: targetCohorteId }
+            })
+          }}
           className="mx-4 my-2 px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer border-none text-sm self-center"
         >
           <span className="material-symbols-outlined text-[18px]">print</span>

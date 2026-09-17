@@ -6,6 +6,7 @@ import ProgressBar from '../components/ProgressBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
+import { descargarWordAutodiagnostico } from '../lib/wordAutodiagnostico'
 
 export default function AutodiagnosticoLayout() {
   const { id, idAutodiagnostico } = useParams()
@@ -13,6 +14,7 @@ export default function AutodiagnosticoLayout() {
   const location = useLocation()
   useAuth()
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [downloadingWord, setDownloadingWord] = useState(false)
 
   const [muni, setMuni] = useState({ nombre: '' })
   const [secciones, setSecciones] = useState([])
@@ -33,7 +35,7 @@ export default function AutodiagnosticoLayout() {
     setTimeout(() => setNotification(null), 4000)
   }
 
-  // Carga inicial: municipio, secciones, preguntas, autodiagnostico y respuestas
+  // Carga inicial: municipio, autodiagnostico, secciones, preguntas y respuestas
   useEffect(() => {
     async function init() {
       setInitialLoading(true)
@@ -47,11 +49,29 @@ export default function AutodiagnosticoLayout() {
       if (muniData) setMuni(muniData)
       else if (muniError) console.error('Error cargando municipio:', muniError)
 
-      // Secciones y preguntas
-      const [{ data: secsData }, { data: pregsData }] = await Promise.all([
-        supabase.from('secciones').select('*').order('orden'),
-        supabase.from('preguntas').select('*, opciones_pregunta(*)').eq('activa', true).order('orden'),
+      // Autodiagnóstico (traemos id_cohorte para resolver la versión de secciones/preguntas)
+      const { data: autodiag } = await supabase
+        .from('autodiagnosticos')
+        .select('id, estado, id_cohorte')
+        .eq('id', idAutodiagnostico)
+        .maybeSingle()
+      if (autodiag) setEstado(autodiag.estado)
+
+      // Secciones y preguntas filtradas por la cohorte del autodiagnóstico
+      let secQuery = supabase.from('secciones').select('*').order('orden')
+      let pregQuery = supabase.from('preguntas').select('*, opciones_pregunta(*)').eq('activa', true).order('orden')
+
+      if (autodiag?.id_cohorte) {
+        secQuery = secQuery.eq('id_cohorte', autodiag.id_cohorte)
+        pregQuery = pregQuery.eq('id_cohorte', autodiag.id_cohorte)
+      }
+
+      const [{ data: secsData }, { data: pregsData }, { data: respsData }] = await Promise.all([
+        secQuery,
+        pregQuery,
+        supabase.from('respuestas').select('*').eq('id_autodiagnostico', idAutodiagnostico),
       ])
+
       const secsArr = secsData ?? []
       const pregsArr = pregsData ?? []
       setSecciones(secsArr)
@@ -63,20 +83,7 @@ export default function AutodiagnosticoLayout() {
         : secsArr.find(s => pregsArr.some(p => p.id_seccion === s.id))?.id ?? null
       setActiveSectionId(initialSec)
 
-      // Autodiagnóstico y respuestas
-      const { data: autodiag } = await supabase
-        .from('autodiagnosticos')
-        .select('id, estado')
-        .eq('id', idAutodiagnostico)
-        .single()
-      if (autodiag) setEstado(autodiag.estado)
-
       // Respuestas existentes
-      const { data: respsData } = await supabase
-        .from('respuestas')
-        .select('*')
-        .eq('id_autodiagnostico', idAutodiagnostico)
-
       const respsMap = {}
       ;(respsData ?? []).forEach(r => {
         respsMap[r.id_pregunta] = r
@@ -138,7 +145,7 @@ export default function AutodiagnosticoLayout() {
       const { error } = await supabase.from('respuestas').update(payload).eq('id', respuesta.id)
       if (error) throw error
     } else {
-      const { data, error } = await supabase.from('respuestas').insert(payload).select().single()
+      const { data, error } = await supabase.from('respuestas').insert(payload).select().maybeSingle()
       if (error) throw error
       return data // devuelve la fila con id para actualizar el estado local
     }
@@ -285,6 +292,18 @@ export default function AutodiagnosticoLayout() {
     }
   }
 
+  const handleDownloadWord = async () => {
+    setDownloadingWord(true)
+    try {
+      await descargarWordAutodiagnostico({ idAutodiagnostico: Number(idAutodiagnostico), idMunicipio: Number(id) })
+    } catch (err) {
+      console.error('Error generando Word:', err)
+      showToast("No se pudo generar el Word. Intentá nuevamente.", "error")
+    } finally {
+      setDownloadingWord(false)
+    }
+  }
+
   // Back button prompt
   const handleBackToDashboard = () => {
     if (saveStatus === 'saving') {
@@ -365,6 +384,15 @@ export default function AutodiagnosticoLayout() {
             className={`material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${downloadingPdf ? 'animate-spin' : ''}`}
           >
             {downloadingPdf ? 'sync' : 'picture_as_pdf'}
+          </button>
+
+          <button
+            onClick={handleDownloadWord}
+            disabled={downloadingWord || initialLoading}
+            title="Descargar Word del autodiagnóstico"
+            className={`material-symbols-outlined text-primary p-2 rounded-full hover:bg-surface-variant transition-colors bg-transparent border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${downloadingWord ? 'animate-spin' : ''}`}
+          >
+            {downloadingWord ? 'sync' : 'description'}
           </button>
 
           {estado === 'completo' ? (
@@ -519,7 +547,7 @@ export default function AutodiagnosticoLayout() {
             <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-sm space-y-2">
               <div className="flex items-center gap-xs text-xs font-bold text-primary uppercase tracking-wider">
                 <span className="material-symbols-outlined text-[16px]">{activeSectionInfo.icon}</span>
-                <span>Sección {activeSectionInfo.orden} de 12</span>
+                <span>Sección {activeSectionInfo.orden} de {secciones.length}</span>
               </div>
               <h2 className="font-headline-lg text-headline-lg text-on-surface font-bold">
                 {activeSectionInfo.nombre}
@@ -563,7 +591,7 @@ export default function AutodiagnosticoLayout() {
             </button>
 
             <span className="font-label-md text-label-md font-semibold text-outline">
-              Sección {activeSectionInfo.orden} de 12
+              Sección {activeSectionInfo.orden} de {secciones.length}
             </span>
 
             {nextActiveSecId ? (

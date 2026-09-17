@@ -19,9 +19,18 @@ export async function getOrCreateAutodiagnostico(idMunicipio, anio = 2025) {
 
   if (existing) return existing.id
 
+  // El autodiagnóstico queda fijo a la cohorte del municipio al momento de
+  // crearse — determina qué versión de secciones/preguntas usa, y no se
+  // mueve aunque el municipio cambie de cohorte más adelante.
+  const { data: muni } = await supabase
+    .from('municipios')
+    .select('id_cohorte')
+    .eq('id', idMunicipio)
+    .maybeSingle()
+
   const { data: created, error } = await supabase
     .from('autodiagnosticos')
-    .insert({ idmunicipio: idMunicipio, anio, estado: 'borrador' })
+    .insert({ idmunicipio: idMunicipio, anio, estado: 'borrador', id_cohorte: muni?.id_cohorte ?? null })
     .select('id')
     .maybeSingle()
 
