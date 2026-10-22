@@ -241,6 +241,7 @@ export default function SeccionFormulario({
   idAutodiagnostico,
   idSeccion,
   preguntas = [],
+  numeracion = null,
   respuestasExistentes = {},
   onChange,
   attemptedNavigation = false
@@ -291,6 +292,8 @@ export default function SeccionFormulario({
         if (hasError) borderClass = 'border-l-4 border-l-error bg-error-container/5'
         else if (isAnswered) borderClass = 'border-l-4 border-l-green-500'
         const currentAnswer = respuestasExistentes[q.id] || {}
+        // Con numeración global (Cohorte 2026) las continuaciones no llevan número propio
+        const numero = numeracion ? numeracion[q.id] : index + 1
 
         return (
           <div key={q.id} id={`preg-card-${q.id}`}
@@ -310,7 +313,7 @@ export default function SeccionFormulario({
             </div>
 
             {/* Enunciado */}
-            <h4 className="font-body-md text-on-surface font-semibold leading-relaxed mb-6">{index + 1}. {q.texto}</h4>
+            <h4 className="font-body-md text-on-surface font-semibold leading-relaxed mb-6">{numero != null && `${numero}. `}{q.texto}</h4>
 
             {/* Input */}
             <div className="w-full">

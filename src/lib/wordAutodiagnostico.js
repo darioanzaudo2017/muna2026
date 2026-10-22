@@ -155,9 +155,9 @@ function preguntaTexto(numero, pregunta, respuesta) {
   const sinResponder = valor === 'Sin responder'
   return [
     new Paragraph({
-      spacing: { before: 240, after: 60 },
+      spacing: { before: numero == null ? 120 : 240, after: 60 },
       children: [
-        new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY }),
+        ...(numero == null ? [] : [new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY })]),
         new TextRun({ text: pregunta.texto, bold: true, size: 22, color: DARK, font: FONT_BODY }),
       ],
     }),
@@ -209,9 +209,9 @@ function preguntaTabla(numero, pregunta, respuesta) {
   const { head, body } = buildTablaRows(pregunta, respuesta)
   const elementos = [
     new Paragraph({
-      spacing: { before: 240, after: 100 },
+      spacing: { before: numero == null ? 120 : 240, after: 100 },
       children: [
-        new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY }),
+        ...(numero == null ? [] : [new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY })]),
         new TextRun({ text: pregunta.texto, bold: true, size: 22, color: DARK, font: FONT_BODY }),
       ],
     }),
@@ -246,7 +246,7 @@ const NOMBRES_GRUPO = {
 }
 
 export async function descargarWordAutodiagnostico({ idAutodiagnostico, idMunicipio }) {
-  const { muni, autodiag, secciones, preguntas, respuestas } = await fetchDatosCompletos(idAutodiagnostico, idMunicipio)
+  const { muni, autodiag, secciones, preguntas, respuestas, numeracion } = await fetchDatosCompletos(idAutodiagnostico, idMunicipio)
 
   let cohorteNombre = null
   if (autodiag.id_cohorte) {
@@ -277,11 +277,13 @@ export async function descargarWordAutodiagnostico({ idAutodiagnostico, idMunici
     children.push(seccionHeading(`${letra}.${numero}`, sec.nombre))
 
     preguntasSec.forEach(p => {
-      numeroGlobal += 1
+      // Con numeración global (Cohorte 2026) el número sale de calcularNumeracion;
+      // en el resto de las cohortes se mantiene el contador corrido de siempre.
+      const numero = numeracion ? numeracion[p.id] : ++numeroGlobal
       if (p.tipo === 'tabla') {
-        children.push(...preguntaTabla(numeroGlobal, p, respuestas[p.id]))
+        children.push(...preguntaTabla(numero, p, respuestas[p.id]))
       } else {
-        children.push(...preguntaTexto(numeroGlobal, p, respuestas[p.id]))
+        children.push(...preguntaTexto(numero, p, respuestas[p.id]))
       }
     })
 

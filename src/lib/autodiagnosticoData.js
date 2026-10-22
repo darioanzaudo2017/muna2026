@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { fetchNumeracionGlobal } from './numeracionPreguntas'
 
 // Lógica compartida de datos y formato entre los exportadores de
 // autodiagnóstico (PDF y Word), para no duplicarla entre módulos.
@@ -99,11 +100,14 @@ export async function fetchDatosCompletos(idAutodiagnostico, idMunicipio) {
   const respuestas = {}
   ;(respuestasRaw ?? []).forEach(r => { respuestas[r.id_pregunta] = r })
 
+  const seccionesOrdenadas = (secciones ?? []).slice().sort((a, b) => a.orden - b.orden)
+
   return {
     muni: muni ?? { nombre: 'Municipio' },
     autodiag: autodiag ?? {},
-    secciones: (secciones ?? []).slice().sort((a, b) => a.orden - b.orden),
+    secciones: seccionesOrdenadas,
     preguntas: preguntas ?? [],
     respuestas,
+    numeracion: await fetchNumeracionGlobal(autodiag?.id_cohorte, seccionesOrdenadas, preguntas ?? []),
   }
 }

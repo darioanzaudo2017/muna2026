@@ -5,6 +5,7 @@ import SaveIndicator from '../components/SaveIndicator'
 import ProgressBar from '../components/ProgressBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { fetchNumeracionGlobal } from '../lib/numeracionPreguntas'
 import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
 import { descargarWordAutodiagnostico } from '../lib/wordAutodiagnostico'
 
@@ -19,6 +20,7 @@ export default function AutodiagnosticoLayout() {
   const [muni, setMuni] = useState({ nombre: '' })
   const [secciones, setSecciones] = useState([])
   const [preguntas, setPreguntas] = useState([])
+  const [numeracion, setNumeracion] = useState(null)
   const [activeSectionId, setActiveSectionId] = useState(null)
   const [respuestas, setRespuestas] = useState({})
   const [estado, setEstado] = useState('borrador')
@@ -76,6 +78,7 @@ export default function AutodiagnosticoLayout() {
       const pregsArr = pregsData ?? []
       setSecciones(secsArr)
       setPreguntas(pregsArr)
+      setNumeracion(await fetchNumeracionGlobal(autodiag?.id_cohorte, secsArr, pregsArr))
 
       // Sección inicial
       const initialSec = location.state?.initialSectionId
@@ -568,6 +571,7 @@ export default function AutodiagnosticoLayout() {
                 idAutodiagnostico={Number(idAutodiagnostico)}
                 idSeccion={activeSectionId}
                 preguntas={currentSectionQuestions}
+                numeracion={numeracion}
                 respuestasExistentes={respuestas}
                 onChange={handleAnswerChange}
                 attemptedNavigation={attemptedNavigation}
