@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import VisorAdjunto from '../components/VisorAdjunto'
 
 export default function PlanDeAccionResumen() {
   const { id } = useParams()
@@ -14,6 +15,7 @@ export default function PlanDeAccionResumen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [expandedActions, setExpandedActions] = useState(new Set())
+  const [adjuntoVisor, setAdjuntoVisor] = useState(null)
 
   const stateCohorteId = location.state?.idCohorte
 
@@ -231,15 +233,14 @@ export default function PlanDeAccionResumen() {
                   </span>
                 </div>
                 {inter.adjunto_url && (
-                  <a
-                    href={inter.adjunto_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline inline-flex items-center gap-0.5 font-bold text-xs self-start sm:self-center"
+                  <button
+                    type="button"
+                    onClick={() => setAdjuntoVisor(inter.adjunto_url)}
+                    className="text-primary hover:underline inline-flex items-center gap-0.5 font-bold text-xs self-start sm:self-center bg-transparent border-none cursor-pointer p-0"
                   >
                     <span className="material-symbols-outlined text-[16px]">attach_file</span>
                     <span>Adjunto</span>
-                  </a>
+                  </button>
                 )}
               </div>
             ))
@@ -486,6 +487,8 @@ export default function PlanDeAccionResumen() {
         )}
 
       </main>
+
+      {adjuntoVisor && <VisorAdjunto adjunto={adjuntoVisor} onClose={() => setAdjuntoVisor(null)} />}
     </div>
   )
 }

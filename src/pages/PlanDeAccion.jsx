@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import VisorAdjunto from '../components/VisorAdjunto'
 
 export default function PlanDeAccion({
   isDashboardTab = false,
@@ -22,12 +23,15 @@ export default function PlanDeAccion({
   const [interventions, setInterventions] = useState([])
   const [loading, setLoading] = useState(true)
   const [resolvedCohorteId, setResolvedCohorteId] = useState(idCohorteProp ?? null)
+  // Sin cohorte resuelta no se carga nada: antes se traía todo sin filtro y se repetía filtrado
+  const [cohorteLista, setCohorteLista] = useState(idCohorteProp !== undefined)
 
   // Estados de UI
   const [activeTab, setActiveTab] = useState('acciones') // 'acciones' | 'metas'
   const [expandedLines, setExpandedLines] = useState({})
   const [expandedActions, setExpandedActions] = useState({})
   const [toast, setToast] = useState(null)
+  const [adjuntoVisor, setAdjuntoVisor] = useState(null)
   const [localIndicadorValues, setLocalIndicadorValues] = useState({})
 
   // Estados de Formularios / Modales
@@ -53,98 +57,66 @@ export default function PlanDeAccion({
         .maybeSingle()
         .then(({ data }) => {
           if (data?.id_cohorte) setResolvedCohorteId(data.id_cohorte)
+          setCohorteLista(true)
         })
     }
   }, [idMunicipio, idCohorteProp])
 
   // Carga de todos los datos necesarios
   const fetchAllData = useCallback(async () => {
+    if (!cohorteLista) return
     setLoading(true)
     try {
       const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+      const porCohorte = (query) => (targetCohorteId ? query.eq('id_cohorte', targetCohorteId) : query)
 
-      // 1. Líneas temáticas del municipio
-      let linesQuery = supabase
-        .from('lineas_municipio')
-        .select('id, idlinea, idmunicipio, objetivo_general, id_cohorte, lista_lineas_tematicas(nombre)')
-        .eq('idmunicipio', idMunicipio)
+      // Consultas independientes entre sí: en paralelo
+      const [linesRes, masterLinesRes, actionsRes, goalsRes, interventionsRes] = await Promise.all([
+        porCohorte(
+          supabase
+            .from('lineas_municipio')
+            .select('id, idlinea, idmunicipio, objetivo_general, id_cohorte, lista_lineas_tematicas(nombre)')
+            .eq('idmunicipio', idMunicipio)
+        ),
+        supabase.from('lista_lineas_tematicas').select('*').eq('activa', true).order('nombre'),
+        porCohorte(supabase.from('acciones').select('*').eq('idmunicipio', idMunicipio)),
+        porCohorte(supabase.from('metas_linea').select('*').eq('idmunicipio', idMunicipio)),
+        porCohorte(
+          supabase
+            .from('intervenciones')
+            .select('*')
+            .eq('idmunicipio', idMunicipio)
+            .order('fecha', { ascending: false })
+        ),
+      ])
 
-      if (targetCohorteId) {
-        linesQuery = linesQuery.eq('id_cohorte', targetCohorteId)
+      for (const res of [linesRes, masterLinesRes, actionsRes, goalsRes, interventionsRes]) {
+        if (res.error) throw res.error
       }
 
-      const { data: linesData, error: linesErr } = await linesQuery
-      if (linesErr) throw linesErr
-
-      // 1b. Catálogo de líneas temáticas master
-      const { data: masterLinesData, error: masterLinesErr } = await supabase
-        .from('lista_lineas_tematicas')
-        .select('*')
-        .eq('activa', true)
-        .order('nombre')
-
-      if (masterLinesErr) throw masterLinesErr
-
-      // 2. Acciones del municipio
-      let actionsQuery = supabase
-        .from('acciones')
-        .select('*')
-        .eq('idmunicipio', idMunicipio)
-
-      if (targetCohorteId) {
-        actionsQuery = actionsQuery.eq('id_cohorte', targetCohorteId)
+      // Pivot metas_acciones: solo los vínculos de las metas de este municipio
+      // (metas_acciones no tiene idmunicipio ni id_cohorte propios)
+      const metaIds = (goalsRes.data || []).map(g => g.id)
+      let pivotData = []
+      if (metaIds.length > 0) {
+        const { data, error } = await supabase.from('metas_acciones').select('*').in('id_meta', metaIds)
+        if (error) throw error
+        pivotData = data
       }
 
-      const { data: actionsData, error: actionsErr } = await actionsQuery
-      if (actionsErr) throw actionsErr
-
-      // 3. Metas del municipio
-      let goalsQuery = supabase
-        .from('metas_linea')
-        .select('*')
-        .eq('idmunicipio', idMunicipio)
-
-      if (targetCohorteId) {
-        goalsQuery = goalsQuery.eq('id_cohorte', targetCohorteId)
-      }
-
-      const { data: goalsData, error: goalsErr } = await goalsQuery
-      if (goalsErr) throw goalsErr
-
-      // 4. Pivot metas_acciones
-      const { data: pivotData, error: pivotErr } = await supabase
-        .from('metas_acciones')
-        .select('*')
-
-      if (pivotErr) throw pivotErr
-
-      // 5. Intervenciones
-      let interventionsQuery = supabase
-        .from('intervenciones')
-        .select('*')
-        .eq('idmunicipio', idMunicipio)
-        .order('fecha', { ascending: false })
-
-      if (targetCohorteId) {
-        interventionsQuery = interventionsQuery.eq('id_cohorte', targetCohorteId)
-      }
-
-      const { data: interventionsData, error: interventionsErr } = await interventionsQuery
-      if (interventionsErr) throw interventionsErr
-
-      setLines(linesData || [])
-      setMasterLines(masterLinesData || [])
-      setActions(actionsData || [])
-      setGoals(goalsData || [])
-      setPivotLinks(pivotData || [])
-      setInterventions(interventionsData || [])
+      setLines(linesRes.data || [])
+      setMasterLines(masterLinesRes.data || [])
+      setActions(actionsRes.data || [])
+      setGoals(goalsRes.data || [])
+      setPivotLinks(pivotData)
+      setInterventions(interventionsRes.data || [])
     } catch (err) {
       console.error(err)
       showToast(err.message || 'Error al cargar los datos de la base de datos', 'error')
     } finally {
       setLoading(false)
     }
-  }, [idMunicipio, idCohorteProp, resolvedCohorteId])
+  }, [idMunicipio, idCohorteProp, resolvedCohorteId, cohorteLista])
 
   useEffect(() => {
     fetchAllData()
@@ -655,15 +627,14 @@ export default function PlanDeAccion({
                                                     {int.fecha}
                                                   </span>
                                                   {int.adjunto_url && (
-                                                    <a
-                                                      href={int.adjunto_url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      className="text-primary hover:underline text-label-sm font-bold flex items-center gap-1"
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setAdjuntoVisor(int.adjunto_url)}
+                                                      className="text-primary hover:underline text-label-sm font-bold flex items-center gap-1 bg-transparent border-none cursor-pointer p-0"
                                                     >
                                                       <span className="material-symbols-outlined text-[16px]">attachment</span>
                                                       Ver Adjunto
-                                                    </a>
+                                                    </button>
                                                   )}
                                                 </div>
                                                 <p className="font-body-md text-on-surface">{int.descripcion}</p>
@@ -880,6 +851,8 @@ export default function PlanDeAccion({
       )}
 
       {/* ==================== TOAST NOTIFICATION ==================== */}
+      {adjuntoVisor && <VisorAdjunto adjunto={adjuntoVisor} onClose={() => setAdjuntoVisor(null)} />}
+
       {toast && (
         <div className={`fixed bottom-4 right-4 z-50 px-6 py-3 rounded-xl shadow-lg border flex items-center gap-2 animate-fade-in ${toast.type === 'error'
             ? 'bg-error-container text-error border-error/20'
@@ -1067,10 +1040,8 @@ function InterventionFormModal({ isOpen, onClose, onSave }) {
         return
       }
 
-      const { data: urlData } = supabase.storage
-        .from('intervenciones')
-        .getPublicUrl(uploaded.path)
-      adjunto_url = urlData.publicUrl
+      // El bucket es privado: se guarda el path y VisorAdjunto descarga con la sesión del usuario
+      adjunto_url = uploaded.path
     }
 
     setUploading(false)
