@@ -831,6 +831,7 @@ export default function PlanDeAccion({
       {/* ==================== MODAL INTERVENCION ==================== */}
       {interventionModal.open && (
         <InterventionFormModal
+          idMunicipio={idMunicipio}
           isOpen={interventionModal.open}
           onClose={() => setInterventionModal({ open: false, actionId: null })}
           onSave={handleSaveIntervention}
@@ -1014,7 +1015,7 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
   )
 }
 
-function InterventionFormModal({ isOpen, onClose, onSave }) {
+function InterventionFormModal({ idMunicipio, isOpen, onClose, onSave }) {
   const [formData, setFormData] = useState({
     fecha: new Date().toISOString().split('T')[0],
     descripcion: '',
@@ -1028,7 +1029,8 @@ function InterventionFormModal({ isOpen, onClose, onSave }) {
 
     if (file) {
       const ext = file.name.split('.').pop()
-      const path = `${Date.now()}.${ext}`
+      // La carpeta es el id del municipio: las políticas de storage restringen por ella
+      const path = `${idMunicipio}/${Date.now()}.${ext}`
       const { data: uploaded, error: uploadErr } = await supabase.storage
         .from('intervenciones')
         .upload(path, file, { upsert: false })
