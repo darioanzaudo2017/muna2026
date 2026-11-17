@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import VisorAdjunto from '../components/VisorAdjunto'
+import { useAuth } from '../context/AuthContext'
 
 export default function PlanDeAccion({
   isDashboardTab = false,
@@ -38,7 +39,10 @@ export default function PlanDeAccion({
   const [lineModal, setLineModal] = useState({ open: false, data: null })
   const [actionModal, setActionModal] = useState({ open: false, data: null, lineId: null })
   const [metaModal, setMetaModal] = useState({ open: false, data: null })
-  const [interventionModal, setInterventionModal] = useState({ open: false, actionId: null })
+  const [interventionModal, setInterventionModal] = useState({ open: false, actionId: null, data: null })
+  // El visor es solo lectura; admin y técnico del municipio pueden editar intervenciones
+  const { profile } = useAuth()
+  const puedeEditarIntervenciones = profile?.role === 'admin' || profile?.role === 'tecnico_municipal'
 
   // Utilidad para notificaciones
   const showToast = (message, type = 'success') => {
@@ -256,21 +260,42 @@ export default function PlanDeAccion({
 
     try {
       const targetCohorteId = idCohorteProp !== undefined ? idCohorteProp : resolvedCohorteId
+      const idEditada = interventionModal.data?.id
 
-      const { error } = await supabase
-        .from('intervenciones')
-        .insert([{
-          id_accion: interventionModal.actionId,
-          idmunicipio: Number(idMunicipio),
-          fecha: formData.fecha || new Date().toISOString().split('T')[0],
-          descripcion: formData.descripcion,
-          adjunto_url: formData.adjunto_url ?? null,
-          ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
-        }])
+      if (idEditada) {
+        // .select() permite detectar un UPDATE que la RLS dejó pasar sin tocar filas
+        const { data: actualizada, error } = await supabase
+          .from('intervenciones')
+          .update({
+            fecha: formData.fecha || interventionModal.data.fecha,
+            descripcion: formData.descripcion,
+            adjunto_url: formData.adjunto_url ?? null,
+          })
+          .eq('id', idEditada)
+          .select('id')
+          .maybeSingle()
 
-      if (error) throw error
+        if (error) throw error
+        if (!actualizada) throw new Error('No se pudo actualizar: no tenés permiso sobre esta intervención')
 
-      showToast('Intervención registrada correctamente')
+        showToast('Intervención actualizada correctamente')
+      } else {
+        const { error } = await supabase
+          .from('intervenciones')
+          .insert([{
+            id_accion: interventionModal.actionId,
+            idmunicipio: Number(idMunicipio),
+            fecha: formData.fecha || new Date().toISOString().split('T')[0],
+            descripcion: formData.descripcion,
+            adjunto_url: formData.adjunto_url ?? null,
+            ...(targetCohorteId ? { id_cohorte: targetCohorteId } : {})
+          }])
+
+        if (error) throw error
+
+        showToast('Intervención registrada correctamente')
+      }
+
       setInterventionModal({ open: false, actionId: null })
       fetchAllData()
     } catch (err) {
@@ -626,16 +651,29 @@ export default function PlanDeAccion({
                                                     <span className="material-symbols-outlined text-[14px]">calendar_today</span>
                                                     {int.fecha}
                                                   </span>
-                                                  {int.adjunto_url && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setAdjuntoVisor(int.adjunto_url)}
-                                                      className="text-primary hover:underline text-label-sm font-bold flex items-center gap-1 bg-transparent border-none cursor-pointer p-0"
-                                                    >
-                                                      <span className="material-symbols-outlined text-[16px]">attachment</span>
-                                                      Ver Adjunto
-                                                    </button>
-                                                  )}
+                                                  <div className="flex items-center gap-md">
+                                                    {int.adjunto_url && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setAdjuntoVisor(int.adjunto_url)}
+                                                        className="text-primary hover:underline text-label-sm font-bold flex items-center gap-1 bg-transparent border-none cursor-pointer p-0"
+                                                      >
+                                                        <span className="material-symbols-outlined text-[16px]">attachment</span>
+                                                        Ver Adjunto
+                                                      </button>
+                                                    )}
+                                                    {puedeEditarIntervenciones && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setInterventionModal({ open: true, actionId: int.id_accion, data: int })}
+                                                        title="Editar intervención"
+                                                        aria-label="Editar intervención"
+                                                        className="text-primary hover:bg-primary/10 rounded-full w-8 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer"
+                                                      >
+                                                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                      </button>
+                                                    )}
+                                                  </div>
                                                 </div>
                                                 <p className="font-body-md text-on-surface">{int.descripcion}</p>
                                               </div>
@@ -832,6 +870,7 @@ export default function PlanDeAccion({
       {interventionModal.open && (
         <InterventionFormModal
           idMunicipio={idMunicipio}
+          data={interventionModal.data}
           isOpen={interventionModal.open}
           onClose={() => setInterventionModal({ open: false, actionId: null })}
           onSave={handleSaveIntervention}
@@ -1015,17 +1054,22 @@ function ActionFormModal({ isOpen, data, onClose, onSave }) {
   )
 }
 
-function InterventionFormModal({ idMunicipio, isOpen, onClose, onSave }) {
+// Alta y edición de una intervención. Con `data` edita: conserva el adjunto actual salvo
+// que se lo quite o se elija otro archivo.
+function InterventionFormModal({ idMunicipio, isOpen, data, onClose, onSave }) {
+  const editando = Boolean(data?.id)
   const [formData, setFormData] = useState({
-    fecha: new Date().toISOString().split('T')[0],
-    descripcion: '',
+    fecha: data?.fecha ?? new Date().toISOString().split('T')[0],
+    descripcion: data?.descripcion ?? '',
   })
   const [file, setFile] = useState(null)
+  const [quitarAdjunto, setQuitarAdjunto] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const adjuntoActual = editando && !quitarAdjunto ? data.adjunto_url : null
 
   const handleSave = async () => {
     setUploading(true)
-    let adjunto_url = null
+    let adjunto_url = adjuntoActual ?? null
 
     if (file) {
       const ext = file.name.split('.').pop()
@@ -1054,7 +1098,9 @@ function InterventionFormModal({ idMunicipio, isOpen, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-md bg-black/40 backdrop-blur-sm">
       <div className="bg-surface-container-lowest w-[500px] max-w-full rounded-3xl p-lg shadow-custom-lg border border-outline-variant space-y-lg">
         <div className="flex justify-between items-center">
-          <h2 className="font-headline-md text-headline-md font-bold text-primary">Registrar Seguimiento / Intervención</h2>
+          <h2 className="font-headline-md text-headline-md font-bold text-primary">
+            {editando ? 'Editar Seguimiento / Intervención' : 'Registrar Seguimiento / Intervención'}
+          </h2>
           <button onClick={onClose} className="p-2 hover:bg-surface-container-high rounded-full cursor-pointer bg-transparent border-none">
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -1083,11 +1129,35 @@ function InterventionFormModal({ idMunicipio, isOpen, onClose, onSave }) {
 
           <div className="space-y-1">
             <label className="font-label-md text-on-surface-variant font-medium">Adjunto (Opcional)</label>
+            {adjuntoActual && !file && (
+              <div className="flex items-center justify-between gap-2 px-md py-sm rounded-xl bg-surface-container border border-outline-variant/40">
+                <span className="font-body-md text-on-surface truncate flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-primary">attachment</span>
+                  Adjunto actual: {adjuntoActual.split('/').pop()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQuitarAdjunto(true)}
+                  className="text-xs text-error flex items-center gap-1 bg-transparent border-none cursor-pointer shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                  Quitar
+                </button>
+              </div>
+            )}
+            {editando && quitarAdjunto && !file && (
+              <p className="text-xs text-on-surface-variant m-0">
+                Se quitará el adjunto al guardar.{' '}
+                <button type="button" onClick={() => setQuitarAdjunto(false)} className="text-primary underline bg-transparent border-none cursor-pointer p-0 text-xs">
+                  Deshacer
+                </button>
+              </p>
+            )}
             <label className={`flex items-center gap-3 w-full px-md py-sm border-2 border-dashed rounded-xl cursor-pointer transition-colors ${file ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline bg-surface'
               }`}>
               <span className="material-symbols-outlined text-outline">upload_file</span>
               <span className="font-body-md text-on-surface-variant truncate">
-                {file ? file.name : 'Seleccionar archivo (PDF, imagen, Word)'}
+                {file ? file.name : adjuntoActual ? 'Reemplazar por otro archivo (PDF, imagen, Word)' : 'Seleccionar archivo (PDF, imagen, Word)'}
               </span>
               <input
                 type="file"
@@ -1122,7 +1192,7 @@ function InterventionFormModal({ idMunicipio, isOpen, onClose, onSave }) {
             className="bg-primary text-on-primary font-bold px-6 py-2.5 rounded-full cursor-pointer hover:opacity-90 active:scale-95 transition-all border-none flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {uploading && <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>}
-            {uploading ? 'Subiendo...' : 'Registrar'}
+            {uploading ? 'Guardando...' : editando ? 'Guardar cambios' : 'Registrar'}
           </button>
         </div>
       </div>
