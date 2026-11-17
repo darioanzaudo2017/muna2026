@@ -34,6 +34,28 @@ export function formatRespuestaSimple(pregunta, respuesta) {
   return 'Sin responder'
 }
 
+// Preguntas `array` con config.presentacion === 'cuadro' se muestran como cuadro de
+// temáticas con una columna "X" (como el documento base MUNA) en vez de lista de casillas.
+export const esChecklistCuadro = (pregunta) =>
+  pregunta.tipo === 'array' && pregunta.config?.presentacion === 'cuadro'
+
+// Las opciones vienen anidadas sin orden garantizado
+export const opcionesOrdenadas = (pregunta) =>
+  (pregunta.opciones_pregunta ?? []).slice().sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+
+// Una fila por opción, en el orden del cuestionario, con su marca
+export function filasChecklist(pregunta, respuesta) {
+  const marcadas = Array.isArray(respuesta?.valor_array) ? respuesta.valor_array : []
+  return opcionesOrdenadas(pregunta).map(o => ({ etiqueta: o.etiqueta, marcada: marcadas.includes(o.valor) }))
+}
+
+// Cuántas filas en blanco lleva un cuadro dinámico sin datos en el Word
+export const FILAS_VACIAS_CUADRO = 5
+
+// Notas al pie del cuadro ((*), (**)): config.notas_pie, array de textos
+export const notasPieTabla = (pregunta) =>
+  Array.isArray(pregunta.config?.notas_pie) ? pregunta.config.notas_pie : []
+
 export function formatCeldaTabla(value, col) {
   if (value === undefined || value === null || value === '') return '—'
   if (col.tipo === 'boolean') {

@@ -1,4 +1,37 @@
 import { useState } from 'react'
+import { esChecklistCuadro, opcionesOrdenadas, notasPieTabla } from '../lib/autodiagnosticoData'
+
+// ─── Temáticas en cuadro con columna "X" (preguntas array con presentacion 'cuadro') ───
+function ChecklistCuadro({ pregunta, currentAnswer, onChange }) {
+  const marcadas = Array.isArray(currentAnswer.valor_array) ? currentAnswer.valor_array : []
+  const alternar = (valor) =>
+    onChange(pregunta.id, 'valor_array', marcadas.includes(valor) ? marcadas.filter(v => v !== valor) : [...marcadas, valor])
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-outline-variant/40">
+      {opcionesOrdenadas(pregunta).map(opt => {
+        const marcada = marcadas.includes(opt.valor)
+        return (
+          <div key={opt.id} className="grid grid-cols-[1fr_64px] items-stretch border-b border-outline-variant/30 last:border-b-0 bg-secondary-container/30">
+            <span className="px-4 py-3 text-sm text-on-surface">{opt.etiqueta}</span>
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={marcada}
+              aria-label={opt.etiqueta}
+              onClick={() => alternar(opt.valor)}
+              className={`border-none border-l border-outline-variant/30 cursor-pointer flex items-center justify-center transition-colors ${
+                marcada ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-transparent hover:bg-surface-container'
+              }`}
+            >
+              <span className="font-bold text-lg leading-none">X</span>
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 // ─── Celda individual según tipo de columna ──────────────────────────────────
 function CeldaInput({ col, value, onChange }) {
@@ -359,7 +392,11 @@ export default function SeccionFormulario({
                 </div>
               )}
 
-              {q.tipo === 'array' && (
+              {esChecklistCuadro(q) && (
+                <ChecklistCuadro pregunta={q} currentAnswer={currentAnswer} onChange={onChange} />
+              )}
+
+              {q.tipo === 'array' && !esChecklistCuadro(q) && (
                 <div className="flex flex-wrap gap-3">
                   {q.opciones_pregunta?.map(opt => {
                     const list = Array.isArray(currentAnswer.valor_array) ? currentAnswer.valor_array : []
@@ -380,7 +417,16 @@ export default function SeccionFormulario({
               )}
 
               {q.tipo === 'tabla' && (
-                <TablaInput pregunta={q} currentAnswer={currentAnswer} onChange={onChange} />
+                <>
+                  <TablaInput pregunta={q} currentAnswer={currentAnswer} onChange={onChange} />
+                  {notasPieTabla(q).length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {notasPieTabla(q).map(nota => (
+                        <p key={nota} className="text-xs text-on-surface-variant">{nota}</p>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
