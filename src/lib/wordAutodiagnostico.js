@@ -1,231 +1,361 @@
 import {
-  Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType,
-  Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType,
-  PageBreak, VerticalAlign, HeightRule,
+  Document, Packer, Paragraph, TextRun, ImageRun, AlignmentType, Header, Footer,
+  Table, TableRow, TableCell, WidthType, BorderStyle, ShadingType, VerticalAlign, HeightRule,
+  PageNumber, TextDirection, TableAnchorType, OverlapType, CharacterSet, LineRuleType,
+  HorizontalPositionRelativeFrom, VerticalPositionRelativeFrom,
 } from 'docx'
-import { supabase } from './supabase'
-import { fetchDatosCompletos, formatRespuestaSimple, buildTablaRows } from './autodiagnosticoData'
+import {
+  fetchDatosCompletos, formatRespuestaSimple, buildTablaRows,
+  esChecklistCuadro, filasChecklist, notasPieTabla, FILAS_VACIAS_CUADRO,
+} from './autodiagnosticoData'
+import portadaUrl from '../assets/word/portada.jpg?url'
+import fondoCianUrl from '../assets/word/fondo-cian.jpg?url'
+import cierreUrl from '../assets/word/cierre.jpg?url'
+import openSansUrl from '../assets/word/fonts/OpenSans-Regular.ttf?url'
+import openSansSemiBoldUrl from '../assets/word/fonts/OpenSans-SemiBold.ttf?url'
+import notoSansExtraBoldUrl from '../assets/word/fonts/NotoSans-ExtraBold.ttf?url'
 
-// Colores oficiales de la paleta DDNA (Manual de Identidad Visual 2026)
-const NAVY = '0B196D'
-const BLUE = '3777FF'
-const ORANGE = 'FF7F11'
-const WHITE = 'FFFFFF'
-const DARK = '171D1C'
-const GRAY_TEXT = '3D4947'
+// Réplica del documento base "Autodiagnóstico municipal – Caja de herramientas MUNA".
+// Colores y tipografías medidos sobre el PDF original (documento de UNICEF/MUNA):
+// celeste UNICEF en portada, divisores y encabezados de cuadro; celeste claro en los campos.
+const CYAN = '009FE3'
+const CAMPO = 'E0EDFD'
+const BLANCO = 'FFFFFF'
+const TEXTO = '1D1D1B'
+const LETRA_DIVISOR = '80CDF1'
+const GRIS = '7A7A7A'
 
-// Forma DJR Banner Bold / Fieldwork Geo Regular son tipografías comerciales
-// pedidas por el manual de marca. Un .docx solo referencia la fuente por
-// nombre — si quien lo abre no la tiene instalada (Baloo 2/Inter son fuentes
-// web, no vienen con Windows/Office), Word la reemplaza en silencio por una
-// genérica. Por eso acá se usan fuentes que sí vienen de fábrica con
-// Office y se acercan al estilo original: Century Gothic (geométrica,
-// redondeada, bold) para títulos y Calibri para el cuerpo.
-const FONT_HEADING = 'Century Gothic'
-const FONT_BODY = 'Calibri'
+// Un .docx solo referencia las fuentes por nombre; las del original (Open Sans y
+// Noto Sans, licencia OFL) no vienen con Office, así que se incrustan en el archivo.
+// Solo se incrusta la variante "regular" de cada familia, por eso los pesos van
+// como familias aparte (SemiBold, ExtraBold) y no con el atributo "negrita".
+const FUENTE_TEXTO = 'Open Sans'
+const FUENTE_NEGRITA = 'Open Sans SemiBold'
+const FUENTE_TITULO = 'Noto Sans ExtraBold'
 
-const NO_BORDERS = {
-  top: { style: BorderStyle.NONE, size: 0, color: WHITE },
-  bottom: { style: BorderStyle.NONE, size: 0, color: WHITE },
-  left: { style: BorderStyle.NONE, size: 0, color: WHITE },
-  right: { style: BorderStyle.NONE, size: 0, color: WHITE },
+// A4 en píxeles a 96 dpi, para las imágenes de página completa
+const PAGINA_ANCHO_PX = 794
+const PAGINA_ALTO_PX = 1123
+
+const NOMBRES_GRUPO = {
+  A: 'Caracterización general',
+  B: 'Abordaje de temáticas específicas',
 }
 
-const CELL_BORDERS = {
-  top: { style: BorderStyle.SINGLE, size: 4, color: 'BCC9C6' },
-  bottom: { style: BorderStyle.SINGLE, size: 4, color: 'BCC9C6' },
-  left: { style: BorderStyle.SINGLE, size: 4, color: 'BCC9C6' },
-  right: { style: BorderStyle.SINGLE, size: 4, color: 'BCC9C6' },
+const PROVINCIA = 'Córdoba'
+
+const TEXTO_INTRODUCCION = [
+  'Este documento contiene el formulario para realizar el Autodiagnóstico MUNA.',
+  'Se solicita responder en este documento las preguntas correspondientes a cada tema. Cuando se consignen datos, indicar fuente y año.',
+  'En la medida de lo posible, desagregar la información según la situación de los grupos en mayor vulnerabilidad. Considerar, entre otras variables, edad, género, discapacidad, pertenencia a comunidades originarias u otros criterios pertinentes.',
+]
+
+const SIN_BORDES = {
+  top: { style: BorderStyle.NONE, size: 0, color: BLANCO },
+  bottom: { style: BorderStyle.NONE, size: 0, color: BLANCO },
+  left: { style: BorderStyle.NONE, size: 0, color: BLANCO },
+  right: { style: BorderStyle.NONE, size: 0, color: BLANCO },
 }
 
-async function fetchLogoBlanco() {
-  try {
-    const { data: recurso } = await supabase
-      .from('recursos_identidad_visual')
-      .select('storage_path')
-      .eq('tipo', 'logo')
-      .ilike('nombre', '%blanco%')
-      .maybeSingle()
-
-    if (!recurso) return null
-
-    const { data: blob, error } = await supabase.storage
-      .from('identidad-visual')
-      .download(recurso.storage_path)
-
-    if (error || !blob) return null
-
-    const buffer = await blob.arrayBuffer()
-    const bitmap = await createImageBitmap(blob)
-    const targetHeight = 90
-    const targetWidth = Math.round((bitmap.width / bitmap.height) * targetHeight)
-
-    return { data: buffer, width: targetWidth, height: targetHeight }
-  } catch (err) {
-    console.warn('No se pudo cargar el logo para el Word:', err)
-    return null
-  }
+// Celdas separadas por una línea blanca, como en los cuadros del original
+const BORDES_CUADRO = {
+  top: { style: BorderStyle.SINGLE, size: 8, color: BLANCO },
+  bottom: { style: BorderStyle.SINGLE, size: 8, color: BLANCO },
+  left: { style: BorderStyle.SINGLE, size: 8, color: BLANCO },
+  right: { style: BorderStyle.SINGLE, size: 8, color: BLANCO },
 }
 
-function coloredBlock({ children, fill = NAVY, heightTwips = 12000 }) {
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: NO_BORDERS,
-    rows: [
-      new TableRow({
-        height: { value: heightTwips, rule: HeightRule.ATLEAST },
-        children: [
-          new TableCell({
-            borders: NO_BORDERS,
-            shading: { fill, type: ShadingType.CLEAR, color: 'auto' },
-            verticalAlign: VerticalAlign.CENTER,
-            margins: { top: 400, bottom: 400, left: 400, right: 400 },
-            children,
+async function cargarRecurso(url) {
+  const respuesta = await fetch(url)
+  if (!respuesta.ok) throw new Error(`No se pudo cargar el recurso del Word: ${url}`)
+  return new Uint8Array(await respuesta.arrayBuffer())
+}
+
+// Imagen a página completa, detrás del texto
+const fondoDePagina = (data) => new Paragraph({
+  children: [new ImageRun({
+    type: 'jpg',
+    data,
+    transformation: { width: PAGINA_ANCHO_PX, height: PAGINA_ALTO_PX },
+    floating: {
+      horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 0 },
+      verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 0 },
+      behindDocument: true,
+      allowOverlap: true,
+      lockAnchor: true,
+    },
+  })],
+})
+
+const encabezadoVacio = () => new Header({ children: [new Paragraph({})] })
+const pieVacio = () => new Footer({ children: [new Paragraph({})] })
+
+// Número de página en celeste y rótulo vertical, arriba a la derecha como en el original
+function encabezadoPagina() {
+  const ancho = 620
+  return new Header({
+    children: [
+      new Table({
+        float: {
+          horizontalAnchor: TableAnchorType.PAGE,
+          verticalAnchor: TableAnchorType.PAGE,
+          absoluteHorizontalPosition: 10900,
+          absoluteVerticalPosition: 560,
+          overlap: OverlapType.NEVER,
+        },
+        width: { size: ancho, type: WidthType.DXA },
+        columnWidths: [ancho],
+        borders: SIN_BORDES,
+        rows: [
+          new TableRow({
+            children: [new TableCell({
+              width: { size: ancho, type: WidthType.DXA },
+              borders: SIN_BORDES,
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ children: [PageNumber.CURRENT], font: FUENTE_TEXTO, size: 40, color: CYAN })],
+              })],
+            })],
+          }),
+          new TableRow({
+            height: { value: 3000, rule: HeightRule.ATLEAST },
+            children: [new TableCell({
+              width: { size: ancho, type: WidthType.DXA },
+              borders: SIN_BORDES,
+              textDirection: TextDirection.TOP_TO_BOTTOM_RIGHT_TO_LEFT,
+              verticalAlign: VerticalAlign.TOP,
+              children: [new Paragraph({
+                children: [
+                  new TextRun({ text: 'CAJA DE HERRAMIENTAS', font: FUENTE_NEGRITA, size: 12, color: TEXTO }),
+                  new TextRun({ text: '   Autodiagnóstico municipal', font: FUENTE_TEXTO, size: 12, color: GRIS }),
+                ],
+              })],
+            })],
           }),
         ],
       }),
+      new Paragraph({}),
     ],
   })
 }
 
-function centeredRun(text, { size = 24, bold = false, color = WHITE, font = FONT_BODY, spacingBefore = 0, spacingAfter = 120 } = {}) {
-  return new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: spacingBefore, after: spacingAfter },
-    children: [new TextRun({ text, size, bold, color, font })],
+function seccionPagina({ children, margen, encabezado = encabezadoVacio() }) {
+  return {
+    properties: { page: { margin: margen } },
+    headers: { default: encabezado },
+    footers: { default: pieVacio() },
+    children,
+  }
+}
+
+// Portada: la imagen original a página completa (título, ilustración y logos MUNA y UNICEF)
+function seccionPortada(portada) {
+  return seccionPagina({
+    margen: { top: 720, bottom: 720, left: 720, right: 720 },
+    children: [fondoDePagina(portada)],
   })
 }
 
-async function buildPortada(muni, autodiag) {
-  const logo = await fetchLogoBlanco()
-  const logoParagraphs = logo
-    ? [new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 300 },
-        children: [new ImageRun({ data: logo.data, transformation: { width: logo.width, height: logo.height }, type: 'jpg' })],
-      })]
-    : [centeredRun('MUNA', { size: 56, bold: true, spacingAfter: 40 })]
+const etiquetaCampo = (texto) => new Paragraph({
+  spacing: { before: 120, after: 120 },
+  children: [new TextRun({ text: texto, font: FUENTE_NEGRITA, size: 24, color: TEXTO })],
+})
 
-  return coloredBlock({
-    fill: BLUE,
-    heightTwips: 13500,
+// Hoja de datos del municipio + consigna, como la página 2 del original
+function seccionIntroduccion({ municipio, fecha }) {
+  const fila = (etiqueta, valor) => new TableRow({
     children: [
-      ...logoParagraphs,
-      centeredRun('Municipio Unido por la Niñez y la Adolescencia', { size: 18, spacingAfter: 500 }),
-      centeredRun('Autodiagnóstico', { size: 64, bold: true, font: FONT_HEADING, spacingAfter: 0 }),
-      centeredRun('municipal', { size: 64, bold: true, font: FONT_HEADING, spacingAfter: 200 }),
-      centeredRun('CAJA DE HERRAMIENTAS', { size: 20, spacingAfter: 700 }),
-      centeredRun(`Municipio: ${muni.nombre}`, { size: 24, bold: true, spacingAfter: 80 }),
-      centeredRun(`Cohorte: ${autodiag.cohorteNombre ?? '—'}`, { size: 22, spacingAfter: 80 }),
-      centeredRun(`Año: ${autodiag.anio ?? '—'}    Estado: ${autodiag.estado ?? '—'}`, { size: 22, spacingAfter: 80 }),
-      centeredRun(`Generado el ${new Date().toLocaleDateString('es-AR')}`, { size: 18, spacingAfter: 0 }),
-    ],
-  })
-}
-
-function buildDivisorGrupo(letra, titulo) {
-  return coloredBlock({
-    fill: NAVY,
-    heightTwips: 13500,
-    children: [
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 200 },
-        children: [new TextRun({ text: letra, size: 216, bold: true, color: 'AFC8FF', font: FONT_HEADING })],
+      new TableCell({
+        width: { size: 38, type: WidthType.PERCENTAGE },
+        margins: { left: 240, right: 120 },
+        verticalAlign: VerticalAlign.CENTER,
+        children: [etiquetaCampo(etiqueta)],
       }),
-      centeredRun(titulo, { size: 48, bold: true, font: FONT_HEADING, spacingAfter: 0 }),
+      new TableCell({
+        width: { size: 62, type: WidthType.PERCENTAGE },
+        margins: { left: 120, right: 240, top: 40, bottom: 40 },
+        verticalAlign: VerticalAlign.CENTER,
+        children: [new Paragraph({
+          shading: { type: ShadingType.CLEAR, fill: CAMPO, color: 'auto' },
+          spacing: { before: 40, after: 40 },
+          children: [new TextRun({ text: ` ${valor}`, font: FUENTE_TEXTO, size: 24, color: TEXTO })],
+        })],
+      }),
+    ],
+  })
+
+  const borde = { style: BorderStyle.SINGLE, size: 12, color: CYAN }
+  const recuadro = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: { top: borde, bottom: borde, left: borde, right: borde, insideHorizontal: SIN_BORDES.top, insideVertical: SIN_BORDES.top },
+    rows: [fila('Municipio:', municipio), fila('Provincia:', PROVINCIA), fila('Fecha de entrega:', fecha)],
+  })
+
+  return seccionPagina({
+    margen: { top: 4600, bottom: 1500, left: 2100, right: 2000 },
+    encabezado: encabezadoPagina(),
+    children: [
+      recuadro,
+      ...TEXTO_INTRODUCCION.map((texto, i) => new Paragraph({
+        spacing: { before: i === 0 ? 700 : 0, after: 260 },
+        children: [new TextRun({ text: texto, font: FUENTE_TEXTO, italics: true, size: 24, color: TEXTO })],
+      })),
     ],
   })
 }
 
-function seccionHeading(numero, nombre) {
-  return new Paragraph({
-    heading: undefined,
-    spacing: { before: 400, after: 200 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: BLUE, space: 6 } },
+// Divisor de grupo (A / B): celeste a página completa, letra grande y título
+function seccionDivisor(letra, titulo, fondo) {
+  return seccionPagina({
+    margen: { top: 2500, bottom: 1000, left: 2700, right: 1500 },
     children: [
-      new TextRun({ text: `${numero}. `, bold: true, size: 30, color: BLUE, font: FONT_HEADING }),
-      new TextRun({ text: nombre, bold: true, size: 30, color: BLUE, font: FONT_HEADING }),
+      fondoDePagina(fondo),
+      new Paragraph({
+        spacing: { line: 4300, lineRule: LineRuleType.EXACT },
+        children: [new TextRun({ text: letra, font: FUENTE_TITULO, size: 358, color: LETRA_DIVISOR })],
+      }),
+      new Paragraph({
+        spacing: { before: 0, line: 820, lineRule: LineRuleType.EXACT },
+        children: [new TextRun({ text: titulo, font: FUENTE_TITULO, size: 72, color: BLANCO })],
+      }),
     ],
+  })
+}
+
+// Cierre: celeste con los logos de MUNA y UNICEF
+function seccionCierre(cierre) {
+  return seccionPagina({
+    margen: { top: 720, bottom: 720, left: 720, right: 720 },
+    children: [fondoDePagina(cierre)],
+  })
+}
+
+function tituloSubseccion(codigo, nombre) {
+  return new Paragraph({
+    keepNext: true,
+    spacing: { before: 520, after: 260 },
+    children: [new TextRun({ text: `${codigo}. ${nombre}`, font: FUENTE_TITULO, size: 50, color: CYAN })],
+  })
+}
+
+function encabezadoPregunta(numero, pregunta, despues) {
+  return new Paragraph({
+    keepNext: true,
+    spacing: { before: numero == null ? 160 : 300, after: despues },
+    children: [
+      ...(numero == null ? [] : [new TextRun({ text: `${numero}. `, font: FUENTE_NEGRITA, size: 24, color: TEXTO })]),
+      new TextRun({ text: pregunta.texto, font: FUENTE_TEXTO, size: 24, color: TEXTO }),
+    ],
+  })
+}
+
+const espacio = (despues = 160) => new Paragraph({ spacing: { after: despues }, children: [] })
+
+// Campo de respuesta: recuadro celeste claro, con la respuesta si la hay
+function campoRespuesta(texto) {
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: SIN_BORDES,
+    rows: [new TableRow({
+      height: { value: 720, rule: HeightRule.ATLEAST },
+      children: [new TableCell({
+        borders: SIN_BORDES,
+        shading: { fill: CAMPO, type: ShadingType.CLEAR, color: 'auto' },
+        margins: { top: 100, bottom: 100, left: 160, right: 160 },
+        children: String(texto ?? '')
+          .split('\n')
+          .map(linea => new Paragraph({ children: [new TextRun({ text: linea, font: FUENTE_TEXTO, size: 22, color: TEXTO })] })),
+      })],
+    })],
   })
 }
 
 function preguntaTexto(numero, pregunta, respuesta) {
   const valor = formatRespuestaSimple(pregunta, respuesta)
-  const sinResponder = valor === 'Sin responder'
-  return [
-    new Paragraph({
-      spacing: { before: numero == null ? 120 : 240, after: 60 },
-      children: [
-        ...(numero == null ? [] : [new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY })]),
-        new TextRun({ text: pregunta.texto, bold: true, size: 22, color: DARK, font: FONT_BODY }),
-      ],
-    }),
-    new Paragraph({
-      spacing: { after: 120 },
-      indent: { left: 300 },
-      children: [
-        new TextRun({
-          text: valor,
-          italics: sinResponder,
-          color: sinResponder ? '6D7A77' : GRAY_TEXT,
-          size: 21,
-          font: FONT_BODY,
-        }),
-      ],
-    }),
-  ]
+  // Sin respuesta, el campo queda en blanco como en el formulario original
+  return [encabezadoPregunta(numero, pregunta, 120), campoRespuesta(valor === 'Sin responder' ? '' : valor), espacio()]
 }
 
-function tablaADocx(head, body) {
-  const colWidth = Math.floor(100 / head.length)
-  const headerRow = new TableRow({
+// Cuadro de temáticas con columna "X" (sin fila de encabezado, como el documento base)
+function preguntaChecklist(numero, pregunta, respuesta) {
+  const filas = filasChecklist(pregunta, respuesta)
+  const celda = (texto, { ancho, centrado, destacado }) => new TableCell({
+    width: { size: ancho, type: WidthType.PERCENTAGE },
+    borders: BORDES_CUADRO,
+    shading: { fill: CAMPO, type: ShadingType.CLEAR, color: 'auto' },
+    verticalAlign: VerticalAlign.CENTER,
+    margins: { top: 90, bottom: 90, left: 140, right: 140 },
+    children: [new Paragraph({
+      alignment: centrado ? AlignmentType.CENTER : AlignmentType.LEFT,
+      children: [new TextRun({ text: texto, font: destacado ? FUENTE_NEGRITA : FUENTE_TEXTO, size: 21, color: TEXTO })],
+    })],
+  })
+  const tabla = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: filas.map(f => new TableRow({
+      children: [
+        celda(f.etiqueta, { ancho: 88 }),
+        celda(f.marcada ? 'X' : '', { ancho: 12, centrado: true, destacado: true }),
+      ],
+    })),
+  })
+  return [encabezadoPregunta(numero, pregunta, 120), tabla, espacio()]
+}
+
+function tablaADocx(head, body, { filasVacias = false } = {}) {
+  // La primera columna (rótulos de fila) más ancha que las de datos
+  const anchoPrimera = head.length > 2 ? 34 : Math.floor(100 / head.length)
+  const anchoDe = (col) => (col === 0 ? anchoPrimera : Math.floor((100 - anchoPrimera) / (head.length - 1)))
+  const encabezado = new TableRow({
     tableHeader: true,
-    children: head.map(label => new TableCell({
-      width: { size: colWidth, type: WidthType.PERCENTAGE },
-      borders: CELL_BORDERS,
-      shading: { fill: BLUE, type: ShadingType.CLEAR, color: 'auto' },
-      margins: { top: 80, bottom: 80, left: 120, right: 120 },
-      children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, color: WHITE, size: 18, font: FONT_BODY })] })],
+    children: head.map((label, col) => new TableCell({
+      width: { size: anchoDe(col), type: WidthType.PERCENTAGE },
+      borders: BORDES_CUADRO,
+      shading: { fill: CYAN, type: ShadingType.CLEAR, color: 'auto' },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: 90, bottom: 90, left: 100, right: 100 },
+      children: [new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: label, font: FUENTE_NEGRITA, size: 20, color: BLANCO })],
+      })],
     })),
   })
 
-  const bodyRows = body.map((row, i) => new TableRow({
-    children: row.map(cell => new TableCell({
-      borders: CELL_BORDERS,
-      shading: { fill: i % 2 === 0 ? 'FFFFFF' : 'F0F5F2', type: ShadingType.CLEAR, color: 'auto' },
-      margins: { top: 80, bottom: 80, left: 120, right: 120 },
-      children: [new Paragraph({ children: [new TextRun({ text: String(cell ?? '—'), size: 18, color: DARK, font: FONT_BODY })] })],
+  const filas = body.map(row => new TableRow({
+    // Cuadro en blanco para completar a mano: filas con altura mínima para escribir
+    ...(filasVacias ? { height: { value: 480, rule: HeightRule.ATLEAST } } : {}),
+    children: row.map((cell, col) => new TableCell({
+      width: { size: anchoDe(col), type: WidthType.PERCENTAGE },
+      borders: BORDES_CUADRO,
+      shading: { fill: CAMPO, type: ShadingType.CLEAR, color: 'auto' },
+      verticalAlign: VerticalAlign.CENTER,
+      margins: { top: 90, bottom: 90, left: 120, right: 120 },
+      children: [new Paragraph({
+        alignment: col === 0 ? AlignmentType.LEFT : AlignmentType.CENTER,
+        children: [new TextRun({ text: cell === '—' ? '' : String(cell ?? ''), font: FUENTE_TEXTO, size: 21, color: TEXTO })],
+      })],
     })),
   }))
 
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [headerRow, ...bodyRows],
-  })
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [encabezado, ...filas] })
 }
 
 function preguntaTabla(numero, pregunta, respuesta) {
   const { head, body } = buildTablaRows(pregunta, respuesta)
-  const elementos = [
-    new Paragraph({
-      spacing: { before: numero == null ? 120 : 240, after: 100 },
-      children: [
-        ...(numero == null ? [] : [new TextRun({ text: `${numero}. `, bold: true, size: 22, color: DARK, font: FONT_BODY })]),
-        new TextRun({ text: pregunta.texto, bold: true, size: 22, color: DARK, font: FONT_BODY }),
-      ],
-    }),
-  ]
+  const elementos = [encabezadoPregunta(numero, pregunta, 120)]
+  const notasPie = notasPieTabla(pregunta).map(nota => new Paragraph({
+    spacing: { before: 60, after: 20 },
+    children: [new TextRun({ text: nota, font: FUENTE_TEXTO, size: 16, color: TEXTO })],
+  }))
 
-  if (body.length === 0) {
-    elementos.push(new Paragraph({
-      spacing: { after: 160 },
-      indent: { left: 300 },
-      children: [new TextRun({ text: 'Sin datos cargados.', italics: true, color: '6D7A77', size: 21, font: FONT_BODY })],
-    }))
+  if (body.length === 0 && pregunta.config?.modo === 'dinamico') {
+    // Sin datos, el cuadro se dibuja igual (en blanco) como en el documento base
+    const vacias = Array.from({ length: FILAS_VACIAS_CUADRO }, () => head.map(() => ''))
+    elementos.push(tablaADocx(head, vacias, { filasVacias: true }), ...notasPie, espacio())
+  } else if (body.length === 0) {
+    elementos.push(campoRespuesta(''), espacio())
   } else {
-    elementos.push(tablaADocx(head, body))
-    elementos.push(new Paragraph({ spacing: { after: 160 }, children: [] }))
+    elementos.push(tablaADocx(head, body), ...notasPie, espacio())
   }
 
   return elementos
@@ -240,82 +370,71 @@ function grupoDeSeccion(preguntasSec) {
   return { letra: match[1], numero: Number(match[2]) }
 }
 
-const NOMBRES_GRUPO = {
-  A: 'Caracterización general',
-  B: 'Abordaje de temáticas específicas',
-}
-
 export async function descargarWordAutodiagnostico({ idAutodiagnostico, idMunicipio }) {
-  const { muni, autodiag, secciones, preguntas, respuestas, numeracion } = await fetchDatosCompletos(idAutodiagnostico, idMunicipio)
-
-  let cohorteNombre = null
-  if (autodiag.id_cohorte) {
-    const { data: cohorte } = await supabase.from('cohortes').select('nombre').eq('id', autodiag.id_cohorte).maybeSingle()
-    cohorteNombre = cohorte?.nombre
-  }
-
-  const children = []
-  children.push(await buildPortada(muni, { ...autodiag, cohorteNombre }))
-  children.push(new Paragraph({ children: [new PageBreak()] }))
+  const [datos, portada, fondoCian, cierre, openSans, openSansSemiBold, notoSansExtraBold] = await Promise.all([
+    fetchDatosCompletos(idAutodiagnostico, idMunicipio),
+    cargarRecurso(portadaUrl),
+    cargarRecurso(fondoCianUrl),
+    cargarRecurso(cierreUrl),
+    cargarRecurso(openSansUrl),
+    cargarRecurso(openSansSemiBoldUrl),
+    cargarRecurso(notoSansExtraBoldUrl),
+  ])
+  const { muni, autodiag, secciones, preguntas, respuestas, numeracion } = datos
 
   const seccionesConPreguntas = secciones
     .map(sec => ({ sec, preguntasSec: preguntas.filter(p => p.id_seccion === sec.id).sort((a, b) => a.orden - b.orden) }))
     .filter(({ preguntasSec }) => preguntasSec.length > 0)
 
-  let grupoActual = null
+  // Las subsecciones se agrupan por letra (A, B): cada grupo lleva su divisor y sus páginas
+  const grupos = []
   let numeroGlobal = 0
 
-  seccionesConPreguntas.forEach(({ sec, preguntasSec }, idx) => {
+  seccionesConPreguntas.forEach(({ sec, preguntasSec }) => {
     const { letra, numero } = grupoDeSeccion(preguntasSec)
+    if (grupos.at(-1)?.letra !== letra) grupos.push({ letra, children: [] })
+    const children = grupos.at(-1).children
 
-    if (letra !== grupoActual) {
-      grupoActual = letra
-      children.push(buildDivisorGrupo(letra, NOMBRES_GRUPO[letra] || 'Sección'))
-      children.push(new Paragraph({ children: [new PageBreak()] }))
-    }
-
-    children.push(seccionHeading(`${letra}.${numero}`, sec.nombre))
+    children.push(tituloSubseccion(`${letra}.${numero}`, sec.nombre))
 
     preguntasSec.forEach(p => {
       // Con numeración global (Cohorte 2026) el número sale de calcularNumeracion;
       // en el resto de las cohortes se mantiene el contador corrido de siempre.
-      const numero = numeracion ? numeracion[p.id] : ++numeroGlobal
-      if (p.tipo === 'tabla') {
-        children.push(...preguntaTabla(numero, p, respuestas[p.id]))
-      } else {
-        children.push(...preguntaTexto(numero, p, respuestas[p.id]))
-      }
+      const n = numeracion ? numeracion[p.id] : ++numeroGlobal
+      if (p.tipo === 'tabla') children.push(...preguntaTabla(n, p, respuestas[p.id]))
+      else if (esChecklistCuadro(p)) children.push(...preguntaChecklist(n, p, respuestas[p.id]))
+      else children.push(...preguntaTexto(n, p, respuestas[p.id]))
     })
-
-    if (idx < seccionesConPreguntas.length - 1) {
-      children.push(new Paragraph({ spacing: { after: 0 }, children: [] }))
-    }
   })
 
-  // Página de cierre
-  children.push(new Paragraph({ children: [new PageBreak()] }))
-  children.push(coloredBlock({
-    fill: BLUE,
-    heightTwips: 13500,
-    children: [
-      centeredRun('¡Muchas gracias!', { size: 48, bold: true, font: FONT_HEADING, spacingAfter: 300 }),
-      centeredRun('MUNA — Municipio Unido por la Niñez y la Adolescencia', { size: 20, spacingAfter: 80 }),
-      centeredRun('En convenio con UNICEF · para cada infancia', { size: 18, spacingAfter: 0 }),
-    ],
-  }))
+  const fecha = new Date().toLocaleDateString('es-AR')
 
   const doc = new Document({
-    sections: [{
-      properties: {
-        page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } },
-      },
-      children,
-    }],
+    creator: 'MUNA — Autodiagnóstico municipal',
+    title: `Autodiagnóstico municipal — ${muni.nombre}`,
+    fonts: [
+      { name: FUENTE_TEXTO, data: openSans, characterSet: CharacterSet.ANSI },
+      { name: FUENTE_NEGRITA, data: openSansSemiBold, characterSet: CharacterSet.ANSI },
+      { name: FUENTE_TITULO, data: notoSansExtraBold, characterSet: CharacterSet.ANSI },
+    ],
     styles: {
       default: {
-        document: { run: { font: FONT_BODY, size: 21 } },
+        document: { run: { font: FUENTE_TEXTO, size: 24, color: TEXTO } },
       },
     },
+    sections: [
+      seccionPortada(portada),
+      seccionIntroduccion({ municipio: muni.nombre, fecha }),
+      ...grupos.flatMap(({ letra, children }) => [
+        seccionDivisor(letra, NOMBRES_GRUPO[letra] || 'Sección', fondoCian),
+        seccionPagina({
+          margen: { top: 2000, bottom: 1500, left: 2100, right: 2000 },
+          encabezado: encabezadoPagina(),
+          children,
+        }),
+      ]),
+      seccionCierre(cierre),
+    ],
   })
 
   const blob = await Packer.toBlob(doc)
