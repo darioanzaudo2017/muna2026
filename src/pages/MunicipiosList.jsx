@@ -4,6 +4,13 @@ import ProgressBar from '../components/ProgressBar'
 import SlideBar from '../components/SlideBar'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { AreaOrdenanzaChips } from '../components/AreaOrdenanza'
+import { ContactosResumen } from '../components/ContactosMunicipio'
+import { CAMPOS_CONTACTOS } from '../lib/contactosMunicipio'
+import { descargarContactosCsv, descargarContactosPdf } from '../lib/exportarMunicipios'
+
+// Select Sí/No/Sin dato del alta -> boolean nullable de la base
+const triestadoABool = (v) => (v === 'si' ? true : v === 'no' ? false : null)
 
 // Colores de estado tipo semáforo — independientes de la paleta de marca
 // (primary/secondary/tertiary), para que no se pisen si la marca cambia.
@@ -19,8 +26,11 @@ export default function MunicipiosList() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showAddModal, setShowAddModal] = useState(false)
+  const [menuDescarga, setMenuDescarga] = useState(false)
   const [newMuniName, setNewMuniName] = useState('')
   const [newMuniCohorteId, setNewMuniCohorteId] = useState('')
+  const [newMuniAreaLocal, setNewMuniAreaLocal] = useState('')
+  const [newMuniOrdenanza, setNewMuniOrdenanza] = useState('')
   const [cohortes, setCohortes] = useState([])
   const [municipiosDisponibles, setMunicipiosDisponibles] = useState([])
   const [municipios, setMunicipios] = useState([])
@@ -33,7 +43,7 @@ export default function MunicipiosList() {
   async function fetchMunicipios() {
     setLoading(true)
     const [{ data: munis }, { data: cohortesData }, { data: seccionesData }] = await Promise.all([
-      supabase.from('municipios').select('id, nombre, ultima_actualizacion, id_cohorte').order('nombre'),
+      supabase.from('municipios').select(`id, nombre, ultima_actualizacion, id_cohorte, tiene_area_local, tiene_ordenanza, ${CAMPOS_CONTACTOS.join(', ')}`).order('nombre'),
       supabase.from('cohortes').select('id, nombre, activa, orden').order('orden'),
       supabase.from('secciones').select('id, nombre, orden, id_cohorte').order('orden'),
     ])
@@ -83,7 +93,13 @@ export default function MunicipiosList() {
         ? new Date(m.ultima_actualizacion).toLocaleDateString('es-AR')
         : 'Sin actividad'
 
-      return { id: m.id, nombre: m.nombre, lastUpdate, progreso, secciones, totalSecciones, ...calcEstado(progreso) }
+      return {
+        id: m.id, nombre: m.nombre, lastUpdate, progreso, secciones, totalSecciones,
+        tieneAreaLocal: m.tiene_area_local, tieneOrdenanza: m.tiene_ordenanza,
+        contactos: Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, m[c]])),
+        cohorteNombre: cohortesData?.find(c => c.id === m.id_cohorte)?.nombre ?? '',
+        ...calcEstado(progreso)
+      }
     }))
 
     setMunicipios(enriched)
@@ -112,10 +128,14 @@ export default function MunicipiosList() {
     }
     const { error } = await supabase.from('municipios').insert({
       nombre,
-      id_cohorte: Number(newMuniCohorteId)
+      id_cohorte: Number(newMuniCohorteId),
+      tiene_area_local: triestadoABool(newMuniAreaLocal),
+      tiene_ordenanza: triestadoABool(newMuniOrdenanza)
     })
     if (!error) {
       setNewMuniName('')
+      setNewMuniAreaLocal('')
+      setNewMuniOrdenanza('')
       setShowAddModal(false)
       fetchMunicipios()
     }
@@ -188,6 +208,44 @@ export default function MunicipiosList() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            {isAdmin && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuDescarga(abierto => !abierto)}
+                  disabled={loading || municipios.length === 0}
+                  aria-haspopup="menu"
+                  aria-expanded={menuDescarga}
+                  title="Descargar intendente y contactos de todos los municipios"
+                  className="bg-surface-container-high text-primary px-lg py-sm rounded-xl font-label-md text-label-md flex items-center gap-xs border-none hover:bg-primary hover:text-on-primary transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[20px]">download</span>
+                  Descargar contactos
+                </button>
+                {menuDescarga && (
+                  <div role="menu" className="absolute right-0 mt-1 w-56 bg-surface-container-lowest rounded-xl shadow-custom-md border border-outline-variant z-40 overflow-hidden">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setMenuDescarga(false); descargarContactosCsv(municipios) }}
+                      className="w-full text-left px-4 py-3 bg-transparent border-none cursor-pointer hover:bg-surface-container flex items-center gap-2 text-label-md text-on-surface"
+                    >
+                      <span className="material-symbols-outlined text-[20px] text-primary">table_chart</span>
+                      Excel (.csv)
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => { setMenuDescarga(false); descargarContactosPdf(municipios) }}
+                      className="w-full text-left px-4 py-3 bg-transparent border-none cursor-pointer hover:bg-surface-container flex items-center gap-2 text-label-md text-on-surface"
+                    >
+                      <span className="material-symbols-outlined text-[20px] text-primary">picture_as_pdf</span>
+                      PDF
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {isAdmin && (
               <button
                 onClick={() => setShowAddModal(true)}
@@ -276,6 +334,9 @@ export default function MunicipiosList() {
                     {muni.estado}
                   </span>
                 </div>
+
+                <AreaOrdenanzaChips tieneAreaLocal={muni.tieneAreaLocal} tieneOrdenanza={muni.tieneOrdenanza} />
+                <ContactosResumen datos={muni.contactos} />
 
                 {/* Progress Section */}
                 <div className="mb-lg">
@@ -441,6 +502,25 @@ export default function MunicipiosList() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  ['¿Tiene área local?', newMuniAreaLocal, setNewMuniAreaLocal],
+                  ['¿Tiene ordenanza?', newMuniOrdenanza, setNewMuniOrdenanza],
+                ].map(([titulo, valor, setValor]) => (
+                  <div className="space-y-2" key={titulo}>
+                    <label className="block text-label-md text-on-surface font-semibold">{titulo}</label>
+                    <select
+                      value={valor}
+                      onChange={(e) => setValor(e.target.value)}
+                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-sm cursor-pointer"
+                    >
+                      <option value="">Sin dato</option>
+                      <option value="si">Sí</option>
+                      <option value="no">No</option>
+                    </select>
+                  </div>
+                ))}
               </div>
               <div className="flex gap-3 justify-end pt-2">
                 <button

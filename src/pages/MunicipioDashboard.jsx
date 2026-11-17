@@ -6,6 +6,9 @@ import { supabase, getOrCreateAutodiagnostico } from '../lib/supabase'
 import { descargarPdfAutodiagnostico } from '../lib/pdfAutodiagnostico'
 import { descargarWordAutodiagnostico } from '../lib/wordAutodiagnostico'
 import PlanDeAccion from './PlanDeAccion'
+import AreaOrdenanzaPanel from '../components/AreaOrdenanza'
+import ContactosMunicipio from '../components/ContactosMunicipio'
+import { CAMPOS_CONTACTOS } from '../lib/contactosMunicipio'
 
 // 12 sections template data with default icons and metrics (for Autodiagnóstico tab)
 const SECCIONES_TEMPLATE = [
@@ -26,7 +29,11 @@ const SECCIONES_TEMPLATE = [
 export default function MunicipioDashboard() {
   const { id } = useParams()
   const navigate = useNavigate()
-  useAuth()
+  const { profile } = useAuth()
+  // El visor es solo lectura; admin y técnico del municipio pueden editar área local / ordenanza
+  const puedeEditarAreaOrdenanza = profile?.role === 'admin' || profile?.role === 'tecnico_municipal'
+  const [areaOrdenanza, setAreaOrdenanza] = useState({ tiene_area_local: null, tiene_ordenanza: null, area_ordenanza_observacion: null })
+  const [contactos, setContactos] = useState(() => Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, null])))
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('plan') // 'auto' | 'plan' ('plan' active by default as requested)
   
@@ -44,7 +51,6 @@ export default function MunicipioDashboard() {
 
   const munId = Number(id) || 1
   const [triggerAddLine, setTriggerAddLine] = useState(0)
-  const [triggerAddAction, setTriggerAddAction] = useState(0)
 
   const [muniNombre, setMuniNombre] = useState('')
   const [cohortesList, setCohortesList] = useState([])
@@ -68,10 +74,18 @@ export default function MunicipioDashboard() {
         // Municipio name & cohorte
         const { data: muniData } = await supabase
           .from('municipios')
-          .select('nombre, id_cohorte')
+          .select(`nombre, id_cohorte, tiene_area_local, tiene_ordenanza, area_ordenanza_observacion, ${CAMPOS_CONTACTOS.join(', ')}`)
           .eq('id', munId)
           .maybeSingle()
-        if (muniData) setMuniNombre(muniData.nombre)
+        if (muniData) {
+          setMuniNombre(muniData.nombre)
+          setAreaOrdenanza({
+            tiene_area_local: muniData.tiene_area_local,
+            tiene_ordenanza: muniData.tiene_ordenanza,
+            area_ordenanza_observacion: muniData.area_ordenanza_observacion,
+          })
+          setContactos(Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, muniData[c]])))
+        }
 
         // Asegurar autodiagnóstico base
         await getOrCreateAutodiagnostico(munId, 2025)
@@ -413,6 +427,20 @@ export default function MunicipioDashboard() {
           </button>
         </section>
 
+        <AreaOrdenanzaPanel
+          idMunicipio={munId}
+          datos={areaOrdenanza}
+          puedeEditar={puedeEditarAreaOrdenanza}
+          onGuardado={setAreaOrdenanza}
+        />
+
+        <ContactosMunicipio
+          idMunicipio={munId}
+          datos={contactos}
+          puedeEditar={puedeEditarAreaOrdenanza}
+          onGuardado={setContactos}
+        />
+
         {/* Metrics Grid */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-md mb-xl">
           <div className="bg-surface-container-lowest p-md rounded-2xl shadow-sm border-l-4 border-primary">
@@ -647,26 +675,9 @@ export default function MunicipioDashboard() {
             idMunicipio={munId}
             idCohorte={selectedCohorteId}
             triggerAddLine={triggerAddLine}
-            triggerAddAction={triggerAddAction}
           />
         )}
       </main>
-
-      {/* Floating Action Button */}
-      <button 
-        onClick={() => {
-          if (activeTab !== 'plan') {
-            setActiveTab('plan')
-          }
-          setTriggerAddAction(prev => prev + 1)
-        }}
-        className="fixed bottom-margin-desktop right-margin-desktop w-16 h-16 bg-primary text-on-primary rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 group border-none cursor-pointer"
-      >
-        <span className="material-symbols-outlined text-[28px]">add</span>
-        <span className="absolute right-full mr-4 bg-inverse-surface text-inverse-on-surface px-3 py-1.5 rounded text-label-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md pointer-events-none">
-          Crear Nueva Acción
-        </span>
-      </button>
 
       {/* Mobile Bottom Navigation Anchor */}
       <nav className="md:hidden fixed bottom-0 w-full bg-surface shadow-[0_-2px_10px_rgba(0,0,0,0.05)] flex justify-around items-center h-16 px-gutter z-50 border-t border-outline-variant">
