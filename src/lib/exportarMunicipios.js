@@ -24,6 +24,8 @@ const COLUMNAS = [
   ['Contacto 2 - Mail', m => m.contactos.contacto2_email],
   ['Tiene área local', m => triestado(m.tieneAreaLocal)],
   ['Tiene ordenanza', m => triestado(m.tieneOrdenanza)],
+  ['Ordenanza adjunta', m => (m.ordenanzaAdjunta ? 'Sí' : 'No')],
+  ['Observación (área local y ordenanza)', m => m.areaOrdenanzaObservacion],
 ]
 
 const celda = (valor) => {
@@ -57,6 +59,12 @@ const textoContacto = (c, n) => {
   return lineas.length ? lineas.join('\n') : sinDato
 }
 
+const textoAreaOrdenanza = (m) => [
+  `Área local: ${triestado(m.tieneAreaLocal)}`,
+  `Ordenanza: ${triestado(m.tieneOrdenanza)}${m.ordenanzaAdjunta ? ' (archivo adjunto)' : ''}`,
+  m.areaOrdenanzaObservacion,
+].filter(Boolean).join('\n')
+
 export async function descargarContactosPdf(municipios) {
   // Se cargan recién al descargar para no sumar peso a la pantalla de municipios
   const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([import('jspdf'), import('jspdf-autotable')])
@@ -67,7 +75,7 @@ export async function descargarContactosPdf(municipios) {
   doc.setFont(undefined, 'bold')
   doc.setFontSize(15)
   doc.setTextColor(...COLOR_PRIMARIO)
-  doc.text('Municipios: intendentes y contactos', margen, margen)
+  doc.text('Municipios: intendentes, contactos, área local y ordenanza', margen, margen)
   doc.setFont(undefined, 'normal')
   doc.setFontSize(9)
   doc.setTextColor(90, 90, 90)
@@ -76,18 +84,19 @@ export async function descargarContactosPdf(municipios) {
   autoTable(doc, {
     startY: margen + 30,
     margin: { left: margen, right: margen },
-    head: [['Municipio', 'Cohorte', 'Intendente/a', 'Contacto 1', 'Contacto 2']],
+    head: [['Municipio', 'Cohorte', 'Intendente/a', 'Contacto 1', 'Contacto 2', 'Área local y ordenanza']],
     body: municipios.map(m => [
       m.nombre,
       m.cohorteNombre || sinDato,
       [m.contactos.intendente_nombre, m.contactos.intendente_partido].filter(Boolean).join('\n') || sinDato,
       textoContacto(m.contactos, 1),
       textoContacto(m.contactos, 2),
+      textoAreaOrdenanza(m),
     ]),
     theme: 'striped',
     styles: { fontSize: 8, cellPadding: 5, valign: 'top' },
     headStyles: { fillColor: COLOR_PRIMARIO },
-    columnStyles: { 0: { cellWidth: 120, fontStyle: 'bold' }, 1: { cellWidth: 80 } },
+    columnStyles: { 0: { cellWidth: 105, fontStyle: 'bold' }, 1: { cellWidth: 65 }, 5: { cellWidth: 150 } },
   })
 
   doc.save(`municipios_intendentes_contactos_${fechaArchivo()}.pdf`)

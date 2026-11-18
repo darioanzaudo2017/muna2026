@@ -43,7 +43,7 @@ export default function MunicipiosList() {
   async function fetchMunicipios() {
     setLoading(true)
     const [{ data: munis }, { data: cohortesData }, { data: seccionesData }] = await Promise.all([
-      supabase.from('municipios').select(`id, nombre, ultima_actualizacion, id_cohorte, tiene_area_local, tiene_ordenanza, ${CAMPOS_CONTACTOS.join(', ')}`).order('nombre'),
+      supabase.from('municipios').select(`id, nombre, ultima_actualizacion, id_cohorte, tiene_area_local, tiene_ordenanza, area_ordenanza_observacion, ordenanza_adjunto_url, ${CAMPOS_CONTACTOS.join(', ')}`).order('nombre'),
       supabase.from('cohortes').select('id, nombre, activa, orden').order('orden'),
       supabase.from('secciones').select('id, nombre, orden, id_cohorte').order('orden'),
     ])
@@ -96,6 +96,8 @@ export default function MunicipiosList() {
       return {
         id: m.id, nombre: m.nombre, lastUpdate, progreso, secciones, totalSecciones,
         tieneAreaLocal: m.tiene_area_local, tieneOrdenanza: m.tiene_ordenanza,
+        areaOrdenanzaObservacion: m.area_ordenanza_observacion,
+        ordenanzaAdjunta: Boolean(m.ordenanza_adjunto_url),
         contactos: Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, m[c]])),
         cohorteNombre: cohortesData?.find(c => c.id === m.id_cohorte)?.nombre ?? '',
         ...calcEstado(progreso)
