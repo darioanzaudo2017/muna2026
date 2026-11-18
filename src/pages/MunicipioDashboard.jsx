@@ -32,7 +32,7 @@ export default function MunicipioDashboard() {
   const { profile } = useAuth()
   // El visor es solo lectura; admin y técnico del municipio pueden editar área local / ordenanza
   const puedeEditarAreaOrdenanza = profile?.role === 'admin' || profile?.role === 'tecnico_municipal'
-  const [areaOrdenanza, setAreaOrdenanza] = useState({ tiene_area_local: null, tiene_ordenanza: null, area_ordenanza_observacion: null })
+  const [areaOrdenanza, setAreaOrdenanza] = useState({ tiene_area_local: null, tiene_ordenanza: null, area_ordenanza_observacion: null, ordenanza_adjunto_url: null })
   const [contactos, setContactos] = useState(() => Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, null])))
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('plan') // 'auto' | 'plan' ('plan' active by default as requested)
@@ -74,7 +74,7 @@ export default function MunicipioDashboard() {
         // Municipio name & cohorte
         const { data: muniData } = await supabase
           .from('municipios')
-          .select(`nombre, id_cohorte, tiene_area_local, tiene_ordenanza, area_ordenanza_observacion, ${CAMPOS_CONTACTOS.join(', ')}`)
+          .select(`nombre, id_cohorte, tiene_area_local, tiene_ordenanza, area_ordenanza_observacion, ordenanza_adjunto_url, ${CAMPOS_CONTACTOS.join(', ')}`)
           .eq('id', munId)
           .maybeSingle()
         if (muniData) {
@@ -83,6 +83,7 @@ export default function MunicipioDashboard() {
             tiene_area_local: muniData.tiene_area_local,
             tiene_ordenanza: muniData.tiene_ordenanza,
             area_ordenanza_observacion: muniData.area_ordenanza_observacion,
+            ordenanza_adjunto_url: muniData.ordenanza_adjunto_url,
           })
           setContactos(Object.fromEntries(CAMPOS_CONTACTOS.map(c => [c, muniData[c]])))
         }

@@ -1,5 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import VisorAdjunto from './VisorAdjunto'
+
+// El archivo de la ordenanza va en el bucket privado `intervenciones`, dentro de la
+// carpeta del municipio (las políticas de storage restringen por esa carpeta).
+const BUCKET_ARCHIVOS = 'intervenciones'
 
 // tiene_area_local / tiene_ordenanza son booleanos nullables: null = todavía sin relevar.
 // Los colores son un semáforo fijo, independiente de la paleta de marca (igual que el estado de avance).
@@ -63,7 +68,7 @@ function SelectorTriestado({ valor, onChange, nombre }) {
   )
 }
 
-function TarjetaEstado({ titulo, icono, valor }) {
+function TarjetaEstado({ titulo, icono, valor, children }) {
   const e = estadoDe(valor)
   return (
     <div className={`flex-1 bg-surface-container-lowest rounded-2xl shadow-sm border-l-4 ${e.borde} p-md flex items-center gap-md`}>
@@ -76,6 +81,7 @@ function TarjetaEstado({ titulo, icono, valor }) {
           <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>{e.icon}</span>
           {e.label}
         </span>
+        {children}
       </div>
     </div>
   )
@@ -87,20 +93,43 @@ export default function AreaOrdenanzaPanel({ idMunicipio, datos, puedeEditar, on
   const [form, setForm] = useState(datos)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState(null)
+  const [archivo, setArchivo] = useState(null)
+  const [quitarArchivo, setQuitarArchivo] = useState(false)
+  const [verArchivo, setVerArchivo] = useState(false)
+  const archivoActual = quitarArchivo ? null : datos.ordenanza_adjunto_url
 
   const abrirEdicion = () => {
     setForm(datos)
     setError(null)
+    setArchivo(null)
+    setQuitarArchivo(false)
     setEditando(true)
   }
 
   const guardar = async () => {
     setGuardando(true)
     setError(null)
+
+    let ordenanza_adjunto_url = archivoActual ?? null
+    if (archivo) {
+      const ext = archivo.name.split('.').pop()
+      const path = `${idMunicipio}/ordenanza_${Date.now()}.${ext}`
+      const { data: subido, error: errSubida } = await supabase.storage
+        .from(BUCKET_ARCHIVOS)
+        .upload(path, archivo, { upsert: false })
+      if (errSubida) {
+        setGuardando(false)
+        setError(`No se pudo subir el archivo: ${errSubida.message}`)
+        return
+      }
+      ordenanza_adjunto_url = subido.path
+    }
+
     const payload = {
       tiene_area_local: form.tiene_area_local,
       tiene_ordenanza: form.tiene_ordenanza,
       area_ordenanza_observacion: form.area_ordenanza_observacion?.trim() || null,
+      ordenanza_adjunto_url,
     }
     // .select() permite detectar un UPDATE que la RLS dejó pasar sin tocar filas
     const { data, error: err } = await supabase
@@ -138,7 +167,18 @@ export default function AreaOrdenanzaPanel({ idMunicipio, datos, puedeEditar, on
         <>
           <div className="flex flex-col md:flex-row gap-md">
             <TarjetaEstado titulo="¿Tiene área local?" icono="domain" valor={datos.tiene_area_local} />
-            <TarjetaEstado titulo="¿Tiene ordenanza?" icono="gavel" valor={datos.tiene_ordenanza} />
+            <TarjetaEstado titulo="¿Tiene ordenanza?" icono="gavel" valor={datos.tiene_ordenanza}>
+              {datos.ordenanza_adjunto_url && (
+                <button
+                  type="button"
+                  onClick={() => setVerArchivo(true)}
+                  className="mt-2 flex items-center gap-1 text-primary font-bold text-label-md bg-transparent border-none cursor-pointer p-0 hover:underline"
+                >
+                  <span className="material-symbols-outlined text-[18px]">visibility</span>
+                  Ver ordenanza
+                </button>
+              )}
+            </TarjetaEstado>
           </div>
           {datos.area_ordenanza_observacion && (
             <div className="mt-md bg-surface-container-lowest rounded-2xl shadow-sm p-md">
@@ -170,11 +210,64 @@ export default function AreaOrdenanzaPanel({ idMunicipio, datos, puedeEditar, on
               className="w-full p-3 bg-surface-container rounded-xl border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary font-body-md text-on-surface resize-none"
             />
           </div>
+          <div>
+            <span className="font-label-md text-label-md text-on-surface font-semibold block mb-1">Ordenanza adjunta (opcional)</span>
+            {archivoActual && !archivo && (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 rounded-xl bg-surface-container border border-outline-variant/40">
+                <button
+                  type="button"
+                  onClick={() => setVerArchivo(true)}
+                  className="flex items-center gap-2 text-on-surface truncate bg-transparent border-none cursor-pointer p-0 font-body-md"
+                >
+                  <span className="material-symbols-outlined text-[18px] text-primary">attachment</span>
+                  <span className="truncate">{archivoActual.split('/').pop()}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuitarArchivo(true)}
+                  className="text-xs text-error flex items-center gap-1 bg-transparent border-none cursor-pointer shrink-0"
+                >
+                  <span className="material-symbols-outlined text-[14px]">delete</span>
+                  Quitar
+                </button>
+              </div>
+            )}
+            {quitarArchivo && !archivo && (
+              <p className="text-xs text-on-surface-variant m-0 mb-2">
+                Se quitará el archivo al guardar.{' '}
+                <button type="button" onClick={() => setQuitarArchivo(false)} className="text-primary underline bg-transparent border-none cursor-pointer p-0 text-xs">
+                  Deshacer
+                </button>
+              </p>
+            )}
+            <label className={`flex items-center gap-3 w-full px-3 py-2 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${archivo ? 'border-primary bg-primary/5' : 'border-outline-variant hover:border-outline bg-surface'}`}>
+              <span className="material-symbols-outlined text-outline">upload_file</span>
+              <span className="font-body-md text-on-surface-variant truncate">
+                {archivo ? archivo.name : archivoActual ? 'Reemplazar por otro archivo (PDF, Word, imagen)' : 'Seleccionar archivo (PDF, Word, imagen)'}
+              </span>
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                onChange={e => setArchivo(e.target.files[0] ?? null)}
+              />
+            </label>
+            {archivo && (
+              <button
+                type="button"
+                onClick={() => setArchivo(null)}
+                className="text-xs text-error flex items-center gap-1 bg-transparent border-none cursor-pointer mt-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+                Quitar archivo seleccionado
+              </button>
+            )}
+          </div>
           {error && <p className="text-error text-label-md">{error}</p>}
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setEditando(false)}
+              onClick={() => { setEditando(false); setArchivo(null); setQuitarArchivo(false) }}
               disabled={guardando}
               className="px-5 h-10 rounded-full bg-surface-container text-on-surface-variant font-bold text-label-md border-none cursor-pointer"
             >
@@ -190,6 +283,10 @@ export default function AreaOrdenanzaPanel({ idMunicipio, datos, puedeEditar, on
             </button>
           </div>
         </div>
+      )}
+
+      {verArchivo && datos.ordenanza_adjunto_url && (
+        <VisorAdjunto adjunto={datos.ordenanza_adjunto_url} onClose={() => setVerArchivo(false)} />
       )}
     </section>
   )
